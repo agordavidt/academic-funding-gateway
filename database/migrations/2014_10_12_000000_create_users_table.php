@@ -12,6 +12,7 @@ return new class extends Migration
             $table->id();
             $table->string('phone_number', 15)->unique()->index();
             $table->string('email')->unique()->nullable()->index();
+             $table->string('password')->nullable();
             $table->string('first_name', 100);
             $table->string('last_name', 100);
             $table->text('address')->nullable();
@@ -31,12 +32,16 @@ return new class extends Migration
             $table->timestamp('email_verified_at')->nullable();
             $table->timestamp('profile_completed_at')->nullable();
             $table->timestamp('payment_completed_at')->nullable();
-            $table->timestamp('application_submitted_at')->nullable();
-            $table->timestamps();
+            $table->timestamp('application_submitted_at')->nullable();          
+            $table->boolean('is_admin')->default(false);
+            $table->timestamp('last_login_at')->nullable();
             
-            // Indexes for performance
+            $table->timestamps();
+
+            // Indexes
             $table->index(['payment_status', 'application_status']);
             $table->index('profile_completion_status');
+            $table->index('is_admin');
         });
     }
 
