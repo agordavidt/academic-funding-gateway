@@ -11,12 +11,12 @@ class TrainingInstitutionSeeder extends Seeder
     {
         $institutions = [
             [
-                'name' => 'TechHub Academy',
+                'name' => 'Ottinic Business School',
                 'description' => 'Leading technology training institute specializing in software development and digital skills.',
                 'contact_email' => 'admin@techhub.academy',
             ],
             [
-                'name' => 'Business Leadership Institute',
+                'name' => 'Ottinic Technology Hub',
                 'description' => 'Professional development programs for business management and entrepreneurship.',
                 'contact_email' => 'info@businessleadership.edu.ng',
             ],

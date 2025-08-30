@@ -15,21 +15,26 @@
 
 <form method="POST" action="{{ route('student.verify-phone') }}">
     @csrf
-    <div class="mb-3">
+    <div class="form-group">
         <label for="phone_number" class="form-label">Phone Number</label>
-        <input type="text" class="form-control @error('phone_number') is-invalid @enderror" 
-               id="phone_number" name="phone_number" 
-               placeholder="Enter your registered phone number" 
-               value="{{ old('phone_number') }}" required>
+        <div class="input-group">
+            <span class="input-group-text">
+                <i class="fas fa-phone text-primary"></i>
+            </span>
+            <input type="text" class="form-control @error('phone_number') is-invalid @enderror" 
+                   id="phone_number" name="phone_number" 
+                   placeholder="Enter your registered phone number" 
+                   value="{{ old('phone_number') }}" required>
+        </div>
         @error('phone_number')
-            <div class="invalid-feedback">{{ $message }}</div>
+            <div class="invalid-feedback d-block">{{ $message }}</div>
         @enderror
-        <div class="form-text">Enter the phone number you provided during data collection</div>
+        <small class="form-text text-muted">Enter the phone number you provided during data collection</small>
     </div>
 
-    <div class="d-grid">
+    <div class="d-grid mt-4">
         <button type="submit" class="btn btn-primary btn-lg">
-            <i class="bi bi-arrow-right me-2"></i>Continue
+            <i class="fas fa-arrow-right me-2"></i>Continue
         </button>
     </div>
 </form>

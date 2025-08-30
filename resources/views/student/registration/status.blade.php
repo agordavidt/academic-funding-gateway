@@ -5,7 +5,7 @@
 @section('content')
 <div class="text-center">
     <div class="mb-4">
-        <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
+        <i class="fas fa-check-circle text-success" style="font-size: 4rem;"></i>
     </div>
     
     <h4 class="text-success mb-3">Registration Complete!</h4>
@@ -15,8 +15,8 @@
     </p>
 
     <div class="alert alert-info">
-        <h6>What's Next?</h6>
-        <ul class="mb-0 text-start">
+        <h6><i class="fas fa-info-circle me-2"></i>What's Next?</h6>
+        <ul class="mb-0 ps-3">
             <li>Your application will be reviewed by our team</li>
             <li>You will receive an email notification about your application status</li>
             <li>If accepted, you will receive instructions for accessing your training program</li>
@@ -26,7 +26,7 @@
 
     <div class="mt-4">
         <a href="{{ route('student.register') }}" class="btn btn-primary">
-            Register Another Application
+            <i class="fas fa-plus me-2"></i>Register Another Application
         </a>
     </div>
 </div>

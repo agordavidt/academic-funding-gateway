@@ -1,21 +1,22 @@
 <?php
 
-
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\DataImportController;
 use App\Http\Controllers\Student\RegistrationController;
 use App\Http\Controllers\Student\PaymentController;
 
-/*
-|--------------------------------------------------------------------------
-| Web Routes
-|--------------------------------------------------------------------------
-*/
-
-// Admin Routes
+// Admin Authentication Routes (No middleware protection)
 Route::prefix('admin')->name('admin.')->group(function () {
+    Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
+    Route::post('/login', [AuthController::class, 'login'])->name('login.post');
+    Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+});
+
+// Protected Admin Routes
+Route::prefix('admin')->name('admin.')->middleware(['admin.auth'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     
     // User Management
@@ -28,8 +29,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
     Route::post('/import/upload', [DataImportController::class, 'upload'])->name('import.upload');
 });
 
-
-
+// Student Routes (unchanged)
 Route::prefix('student')->name('student.')->group(function () {
     Route::get('/register', [RegistrationController::class, 'index'])->name('register');
     Route::post('/verify-phone', [RegistrationController::class, 'verifyPhone'])->name('verify-phone');
@@ -45,7 +45,7 @@ Route::prefix('student')->name('student.')->group(function () {
     Route::get('/status', [RegistrationController::class, 'status'])->name('status');
 });
 
-// Payment webhook (for real payment gateway integration)
+// Payment webhook
 Route::post('/payment/webhook', [PaymentController::class, 'webhook'])->name('payment.webhook');
 
 // Redirect root to student registration

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="95" fill="#1e40af" stroke="#1e3a8a" stroke-width="3"/>
+  
+  <!-- Medical cross -->
+  <rect x="85" y="60" width="30" height="80" fill="white"/>
+  <rect x="60" y="85" width="80" height="30" fill="white"/>
+  
+  <!-- Book/Education symbol -->
+  <rect x="70" y="140" width="60" height="8" fill="white" rx="2"/>
+  <rect x="75" y="150" width="50" height="6" fill="white" rx="1"/>
+  <rect x="80" y="158" width="40" height="4" fill="white" rx="1"/>
+  
+  <!-- Institution initials -->
+  <text x="100" y="45" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="16" font-weight="bold">IHT</text>
+  <text x="100" y="185" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="12">BSUTH</text>
+</svg>
