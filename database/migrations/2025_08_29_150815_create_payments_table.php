@@ -11,20 +11,13 @@ return new class extends Migration
     {
         Schema::create('payments', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->string('transaction_id', 100)->unique();
-            $table->string('flutterwave_ref', 100)->unique();
+            $table->foreignId('user_id')->constrained()->onDelete('cascade');
+            $table->string('transaction_id')->unique();
             $table->decimal('amount', 10, 2);
-            $table->string('currency', 3)->default('NGN');
-            $table->enum('status', ['pending', 'success', 'failed', 'cancelled'])->default('pending');
-            $table->enum('payment_method', ['card', 'bank_transfer', 'ussd', 'mobile_money'])->nullable();
-            $table->json('gateway_response')->nullable();
+            $table->enum('status', ['pending', 'success', 'failed'])->default('pending');
             $table->timestamp('paid_at')->nullable();
+            $table->json('gateway_response')->nullable();
             $table->timestamps();
-            
-            // Indexes
-            $table->index(['user_id', 'status']);
-            $table->index('transaction_id');
         });
     }
 

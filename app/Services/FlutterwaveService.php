@@ -2,63 +2,82 @@
 
 namespace App\Services;
 
-use Flutterwave\v3\Flutterwave;
+use App\Models\Payment;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class FlutterwaveService
 {
-    protected $flutterwave;
-    
+    private $publicKey;
+    private $secretKey;
+    private $baseUrl;
+
     public function __construct()
     {
-        $this->flutterwave = new Flutterwave(config('funding.flutterwave.public_key'));
+        $this->publicKey = config('flutterwave.publicKey');
+        $this->secretKey = config('flutterwave.secretKey');
+        $this->baseUrl = config('flutterwave.paymentUrl');
     }
-    
-    public function initializePayment(array $data)
+
+    public function initiatePayment(Payment $payment, $redirectUrl)
     {
+        $data = [
+            'tx_ref' => $payment->transaction_id,
+            'amount' => $payment->amount,
+            'currency' => 'NGN',
+            'redirect_url' => $redirectUrl,
+            'customer' => [
+                'email' => $payment->user->email,
+                'phonenumber' => $payment->user->phone_number,
+                'name' => $payment->user->full_name,
+            ],
+            'customizations' => [
+                'title' => 'Academic Funding Gateway',
+                'description' => 'Grant Registration Fee',
+                'logo' => config('app.url') . '/images/logo.png',
+            ],
+        ];
+
         try {
-            $payload = [
-                'tx_ref' => $data['tx_ref'],
-                'amount' => $data['amount'],
-                'currency' => $data['currency'],
-                'payment_options' => 'card,banktransfer,ussd',
-                'customer' => $data['customer'],
-                'customizations' => $data['customizations'],
-                'redirect_url' => $data['redirect_url']
-            ];
-            
-            $response = $this->flutterwave->payment->initiate($payload);
-            
-            if ($response['status'] !== 'success') {
-                throw new \Exception('Payment initialization failed: ' . $response['message']);
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $this->secretKey,
+                'Content-Type' => 'application/json',
+            ])->post($this->baseUrl, $data);
+
+            if ($response->successful()) {
+                $responseData = $response->json();
+                if ($responseData['status'] === 'success') {
+                    return $responseData['data']['link'];
+                }
             }
-            
-            return $response;
-            
-        } catch (\Exception $e) {
-            Log::error('Flutterwave payment initialization failed', [
-                'data' => $data,
-                'error' => $e->getMessage()
+
+            Log::error('Flutterwave payment initiation failed', [
+                'response' => $response->json(),
+                'payment_id' => $payment->id,
             ]);
-            
-            throw $e;
+
+            return null;
+        } catch (\Exception $e) {
+            Log::error('Flutterwave payment error: ' . $e->getMessage());
+            return null;
         }
     }
-    
-    public function verifyPayment(string $transactionId)
+
+    public function verifyPayment($transactionId)
     {
         try {
-            $response = $this->flutterwave->transaction->verify($transactionId);
-            
-            return $response;
-            
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $this->secretKey,
+            ])->get($this->baseUrl . "/transactions/{$transactionId}/verify");
+
+            if ($response->successful()) {
+                return $response->json();
+            }
+
+            return null;
         } catch (\Exception $e) {
-            Log::error('Flutterwave payment verification failed', [
-                'transaction_id' => $transactionId,
-                'error' => $e->getMessage()
-            ]);
-            
-            throw $e;
+            Log::error('Flutterwave verification error: ' . $e->getMessage());
+            return null;
         }
     }
 }

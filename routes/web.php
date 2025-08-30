@@ -1,91 +1,54 @@
 <?php
 
-use App\Http\Controllers\Auth\AuthController;
-use App\Http\Controllers\Auth\AdminAuthController;
-use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\PaymentController;
-use App\Http\Controllers\ApplicationController;
-use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
-use App\Http\Controllers\Admin\StudentController as AdminStudentController;
-use App\Http\Controllers\Admin\ApplicationController as AdminApplicationController;
+
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\DataImportController;
+use App\Http\Controllers\Student\RegistrationController;
+use App\Http\Controllers\Student\PaymentController;
 
-// Public Routes
-Route::get('/', function () {
-    return redirect()->route('login');
-});
+/*
+|--------------------------------------------------------------------------
+| Web Routes
+|--------------------------------------------------------------------------
+*/
 
-// Student Authentication Routes
-Route::middleware('guest')->group(function () {
-    Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
-    Route::post('/login', [AuthController::class, 'login']);
-});
-
-Route::post('/logout', [AuthController::class, 'logout'])
-    ->middleware('auth')
-    ->name('logout');
-
-// Student Protected Routes
-Route::middleware(['auth', 'verified'])->group(function () {
-    // Dashboard
+// Admin Routes
+Route::prefix('admin')->name('admin.')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     
-    // Profile Routes
-    Route::prefix('profile')->name('profile.')->group(function () {
-        Route::get('/', [ProfileController::class, 'show'])->name('show');
-        Route::get('/edit', [ProfileController::class, 'edit'])->name('edit');
-        Route::put('/update', [ProfileController::class, 'update'])->name('update');
-    });
+    // User Management
+    Route::get('/users', [UserController::class, 'index'])->name('users.index');
+    Route::get('/users/{user}', [UserController::class, 'show'])->name('users.show');
+    Route::patch('/users/{user}/status', [UserController::class, 'updateApplicationStatus'])->name('users.update-status');
     
-    // Payment Routes
-    Route::prefix('payment')->name('payment.')->group(function () {
-        Route::get('/', [PaymentController::class, 'show'])->name('show');
-        Route::post('/initialize', [PaymentController::class, 'initialize'])->name('initialize');
-        Route::get('/callback', [PaymentController::class, 'callback'])->name('callback');
-    });
-    
-    // Application Routes
-    Route::prefix('application')->name('application.')->group(function () {
-        Route::get('/', [ApplicationController::class, 'show'])->name('show');
-        Route::post('/', [ApplicationController::class, 'store'])->name('store');
-        Route::get('/edit', [ApplicationController::class, 'edit'])->name('edit');
-        Route::put('/update', [ApplicationController::class, 'update'])->name('update');
-    });
+    // Data Import
+    Route::get('/import', [DataImportController::class, 'index'])->name('import.index');
+    Route::post('/import/upload', [DataImportController::class, 'upload'])->name('import.upload');
 });
 
-// Admin Authentication Routes
-Route::prefix('admin')->name('admin.')->group(function () {
-    Route::middleware('guest:admin')->group(function () {
-        Route::get('/login', [AdminAuthController::class, 'showLogin'])->name('login');
-        Route::post('/login', [AdminAuthController::class, 'login']);
-    });
+
+
+Route::prefix('student')->name('student.')->group(function () {
+    Route::get('/register', [RegistrationController::class, 'index'])->name('register');
+    Route::post('/verify-phone', [RegistrationController::class, 'verifyPhone'])->name('verify-phone');
     
-    Route::post('/logout', [AdminAuthController::class, 'logout'])
-        ->middleware('auth')
-        ->name('logout');
+    Route::get('/profile', [RegistrationController::class, 'showProfile'])->name('profile');
+    Route::post('/profile', [RegistrationController::class, 'updateProfile'])->name('profile.update');
+    
+    Route::get('/payment', [RegistrationController::class, 'showPayment'])->name('payment');
+    Route::post('/payment', [RegistrationController::class, 'processPayment'])->name('payment.process');
+    Route::get('/payment/gateway/{payment}', [RegistrationController::class, 'paymentGateway'])->name('payment.gateway');
+    Route::post('/payment/confirm/{payment}', [RegistrationController::class, 'confirmPayment'])->name('payment.confirm');
+    
+    Route::get('/status', [RegistrationController::class, 'status'])->name('status');
 });
 
-// Admin Protected Routes
-Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(function () {
-    // Admin Dashboard
-    Route::get('/dashboard', [AdminDashboardController::class, 'index'])->name('dashboard');
-    
-    // Student Management
-    Route::prefix('students')->name('students.')->group(function () {
-        Route::get('/', [AdminStudentController::class, 'index'])->name('index');
-        Route::get('/{student}', [AdminStudentController::class, 'show'])->name('show');
-        Route::put('/{student}/status', [AdminStudentController::class, 'updateStatus'])->name('update-status');
-        
-        // CSV Import
-        Route::get('/import', [AdminStudentController::class, 'import'])->name('import');
-        Route::post('/import', [AdminStudentController::class, 'processImport'])->name('process-import');
-    });
-    
-    // Application Management
-    Route::prefix('applications')->name('applications.')->group(function () {
-        Route::get('/', [AdminApplicationController::class, 'index'])->name('index');
-        Route::get('/{application}', [AdminApplicationController::class, 'show'])->name('show');
-        Route::put('/{application}/review', [AdminApplicationController::class, 'review'])->name('review');
-    });
+// Payment webhook (for real payment gateway integration)
+Route::post('/payment/webhook', [PaymentController::class, 'webhook'])->name('payment.webhook');
+
+// Redirect root to student registration
+Route::get('/', function () {
+    return redirect()->route('student.register');
 });

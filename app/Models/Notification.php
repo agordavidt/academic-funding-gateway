@@ -6,18 +6,21 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Application extends Model
+class Notification extends Model
 {
     use HasFactory;
 
     protected $fillable = [
         'user_id',
-        'need_assessment_text',
-        'terms_agreed_at',
+        'type',
+        'subject',
+        'message_body',
+        'status',
+        'sent_at',
     ];
 
     protected $casts = [
-        'terms_agreed_at' => 'datetime',
+        'sent_at' => 'datetime',
     ];
 
     public function user()

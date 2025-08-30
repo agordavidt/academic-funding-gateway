@@ -11,21 +11,10 @@ return new class extends Migration
     {
         Schema::create('applications', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('training_institution_id')->nullable()->constrained()->nullOnDelete();
-            $table->text('need_assessment_text');
-            $table->json('supporting_documents')->nullable();
-            $table->timestamp('terms_agreed_at');
-            $table->text('admin_notes')->nullable();
-            $table->text('rejection_reason')->nullable();
-            $table->timestamp('reviewed_at')->nullable();
-            $table->foreignId('reviewed_by')->nullable()->constrained('users')->nullOnDelete();
-            $table->decimal('approved_amount', 10, 2)->nullable();
+            $table->foreignId('user_id')->constrained()->onDelete('cascade');
+            $table->text('need_assessment_text')->nullable();
+            $table->timestamp('terms_agreed_at')->nullable();
             $table->timestamps();
-            
-            // Indexes
-            $table->index('user_id');
-            $table->index('training_institution_id');
         });
     }
 

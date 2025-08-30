@@ -6,39 +6,31 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
-/**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\User>
- */
 class UserFactory extends Factory
 {
-    /**
-     * The current password being used by the factory.
-     */
-    protected static ?string $password;
-
-    /**
-     * Define the model's default state.
-     *
-     * @return array<string, mixed>
-     */
-    public function definition(): array
+    public function definition()
     {
         return [
-            'name' => fake()->name(),
-            'email' => fake()->unique()->safeEmail(),
-            'email_verified_at' => now(),
-            'password' => static::$password ??= Hash::make('password'),
+            'phone_number' => $this->faker->unique()->numerify('081########'),
+            'email' => $this->faker->unique()->safeEmail(),
+            'first_name' => $this->faker->firstName(),
+            'last_name' => $this->faker->lastName(),
+            'address' => $this->faker->address(),
+            'school' => $this->faker->randomElement([
+                'University of Lagos',
+                'University of Abuja',
+                'University of Port Harcourt',
+                'Ahmadu Bello University',
+                'University of Nigeria Nsukka',
+                'Obafemi Awolowo University',
+                'University of Ibadan',
+            ]),
+            'matriculation_number' => strtoupper($this->faker->bothify('???/####/###')),
+            'registration_stage' => $this->faker->randomElement(['imported', 'profile_completion', 'payment', 'completed']),
+            'payment_status' => $this->faker->randomElement(['pending', 'paid']),
+            'application_status' => $this->faker->randomElement(['pending', 'reviewing', 'accepted', 'rejected']),
+            'password' => Hash::make('password123'),
             'remember_token' => Str::random(10),
         ];
-    }
-
-    /**
-     * Indicate that the model's email address should be unverified.
-     */
-    public function unverified(): static
-    {
-        return $this->state(fn (array $attributes) => [
-            'email_verified_at' => null,
-        ]);
     }
 }
