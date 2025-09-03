@@ -67,7 +67,7 @@
                     </div>
                     <div class="col-7 col-stats">
                         <div class="numbers">
-                            <p class="card-category">Pending Payments</p>
+                            <p class="card-category">Pending Reviews</p>
                             <h4 class="card-title">{{ number_format($stats['pending_payments']) }}</h4>
                         </div>
                     </div>
@@ -98,54 +98,80 @@
 </div>
 
 <div class="row">
-    <div class="col-md-6">
+    <div class="col-md-12">
         <div class="card">
             <div class="card-header">
                 <div class="card-head-row">
-                    <div class="card-title">Application Status</div>
+                    <div class="card-title">Completed Registrations by Month ({{ $currentYear }})</div>
                 </div>
             </div>
             <div class="card-body">
-                <div class="row">
-                    <div class="col-6 text-center">
-                        <div class="p-3 border-right">
-                            <h2 class="text-success mb-0">{{ $stats['accepted_applications'] }}</h2>
-                            <small class="text-muted">Accepted</small>
-                        </div>
-                    </div>
-                    <div class="col-6 text-center">
-                        <div class="p-3">
-                            <h2 class="text-warning mb-0">{{ $stats['pending_applications'] }}</h2>
-                            <small class="text-muted">Pending Review</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <div class="card-head-row">
-                    <div class="card-title">Quick Actions</div>
-                </div>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-6 text-center mb-3">
-                        <a href="{{ route('admin.users.index') }}" class="btn btn-primary btn-block">
-                            <i class="fas fa-users me-2"></i>Manage Students
-                        </a>
-                    </div>
-                    <div class="col-6 text-center mb-3">
-                        <a href="{{ route('admin.import.index') }}" class="btn btn-secondary btn-block">
-                            <i class="fas fa-file-import me-2"></i>Import Data
-                        </a>
-                    </div>
-                </div>
+                <canvas id="registrationChart" width="400" height="100"></canvas>
             </div>
         </div>
     </div>
 </div>
 @endsection
+
+@push('scripts')
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const ctx = document.getElementById('registrationChart').getContext('2d');
+    
+    const chartData = @json(array_values($completedByMonth));
+    const chartLabels = @json(array_keys($completedByMonth));
+    
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: chartLabels,
+            datasets: [{
+                label: 'Completed Registrations',
+                data: chartData,
+                borderColor: '#1f77b4',
+                backgroundColor: 'rgba(31, 119, 180, 0.1)',
+                borderWidth: 3,
+                fill: true,
+                tension: 0.4,
+                pointBackgroundColor: '#1f77b4',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                pointRadius: 6,
+                pointHoverRadius: 8,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    },
+                    grid: {
+                        color: 'rgba(0,0,0,0.1)'
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    }
+                }
+            },
+            elements: {
+                point: {
+                    hoverBackgroundColor: '#1f77b4'
+                }
+            }
+        }
+    });
+});
+</script>
+@endpush

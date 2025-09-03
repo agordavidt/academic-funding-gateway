@@ -14,7 +14,7 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->string('transaction_id')->unique();
             $table->decimal('amount', 10, 2);
-            $table->enum('status', ['pending', 'success', 'failed'])->default('pending');
+            $table->enum('status', ['pending', 'submitted', 'success', 'failed'])->default('pending');
             $table->timestamp('paid_at')->nullable();
             $table->json('gateway_response')->nullable();
             $table->string('payment_evidence')->nullable(); // For storing uploaded file path
