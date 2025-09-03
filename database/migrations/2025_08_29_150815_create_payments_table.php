@@ -17,6 +17,8 @@ return new class extends Migration
             $table->enum('status', ['pending', 'success', 'failed'])->default('pending');
             $table->timestamp('paid_at')->nullable();
             $table->json('gateway_response')->nullable();
+            $table->string('payment_evidence')->nullable(); // For storing uploaded file path
+            $table->text('payment_note')->nullable(); // For any additional notes from user
             $table->timestamps();
         });
     }

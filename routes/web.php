@@ -24,12 +24,20 @@ Route::prefix('admin')->name('admin.')->middleware(['admin.auth'])->group(functi
     Route::get('/users/{user}', [UserController::class, 'show'])->name('users.show');
     Route::patch('/users/{user}/status', [UserController::class, 'updateApplicationStatus'])->name('users.update-status');
     
+    // Payment Management
+    Route::post('/users/{user}/approve-payment', [UserController::class, 'approvePayment'])->name('users.approve-payment');
+    Route::post('/users/{user}/reject-payment', [UserController::class, 'rejectPayment'])->name('users.reject-payment');
+    
+    // SMS Management
+    Route::post('/users/{user}/sms', [UserController::class, 'sendSms'])->name('users.send-sms');
+    Route::post('/users/bulk-sms', [UserController::class, 'bulkSms'])->name('users.bulk-sms');
+    
     // Data Import
     Route::get('/import', [DataImportController::class, 'index'])->name('import.index');
     Route::post('/import/upload', [DataImportController::class, 'upload'])->name('import.upload');
 });
 
-// Student Routes (unchanged)
+// Student Routes
 Route::prefix('student')->name('student.')->group(function () {
     Route::get('/register', [RegistrationController::class, 'index'])->name('register');
     Route::post('/verify-phone', [RegistrationController::class, 'verifyPhone'])->name('verify-phone');
@@ -39,13 +47,11 @@ Route::prefix('student')->name('student.')->group(function () {
     
     Route::get('/payment', [RegistrationController::class, 'showPayment'])->name('payment');
     Route::post('/payment', [RegistrationController::class, 'processPayment'])->name('payment.process');
-    Route::get('/payment/gateway/{payment}', [RegistrationController::class, 'paymentGateway'])->name('payment.gateway');
-    Route::post('/payment/confirm/{payment}', [RegistrationController::class, 'confirmPayment'])->name('payment.confirm');
     
     Route::get('/status', [RegistrationController::class, 'status'])->name('status');
 });
 
-// Payment webhook
+// Payment webhook (can be kept for future integrations or removed)
 Route::post('/payment/webhook', [PaymentController::class, 'webhook'])->name('payment.webhook');
 
 // Redirect root to student registration

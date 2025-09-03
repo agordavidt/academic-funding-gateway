@@ -1,6 +1,5 @@
 <?php
 
-
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -17,6 +16,8 @@ class Payment extends Model
         'status',
         'paid_at',
         'gateway_response',
+        'payment_evidence',
+        'payment_note',
     ];
 
     protected $casts = [
@@ -27,5 +28,13 @@ class Payment extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function getPaymentEvidenceUrlAttribute()
+    {
+        if ($this->payment_evidence) {
+            return asset('storage/' . $this->payment_evidence);
+        }
+        return null;
     }
 }

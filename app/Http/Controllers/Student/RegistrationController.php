@@ -1,6 +1,5 @@
 <?php
 
-
 namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
@@ -10,6 +9,7 @@ use App\Models\Payment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Storage;
 
 class RegistrationController extends Controller
 {
@@ -105,7 +105,17 @@ class RegistrationController extends Controller
             return redirect()->route('student.status');
         }
 
-        return view('student.registration.payment', compact('user'));
+        // Create payment record if it doesn't exist
+        $payment = Payment::firstOrCreate(
+            ['user_id' => $user->id, 'status' => 'pending'],
+            [
+                'transaction_id' => 'TXN_' . time() . '_' . $user->id,
+                'amount' => 3000.00,
+                'status' => 'pending',
+            ]
+        );
+
+        return view('student.registration.payment', compact('user', 'payment'));
     }
 
     public function processPayment(Request $request)
@@ -119,6 +129,8 @@ class RegistrationController extends Controller
 
         $request->validate([
             'terms_agreed' => 'required|accepted',
+            'payment_evidence' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120', // 5MB max
+            'payment_note' => 'nullable|string|max:500',
         ]);
 
         // Update terms agreement
@@ -126,56 +138,47 @@ class RegistrationController extends Controller
             'terms_agreed_at' => now()
         ]);
 
-        // Create payment record
-        $payment = Payment::create([
-            'user_id' => $user->id,
-            'transaction_id' => 'TXN_' . time() . '_' . $user->id,
-            'amount' => 3000.00,
-            'status' => 'pending',
+        // Handle file upload
+        $evidencePath = null;
+        if ($request->hasFile('payment_evidence')) {
+            $evidencePath = $request->file('payment_evidence')->store('payment_evidence', 'public');
+        }
+
+        // Find or create payment record
+        $payment = Payment::where('user_id', $user->id)->where('status', 'pending')->first();
+        if (!$payment) {
+            $payment = Payment::create([
+                'user_id' => $user->id,
+                'transaction_id' => 'TXN_' . time() . '_' . $user->id,
+                'amount' => 3000.00,
+                'status' => 'pending',
+            ]);
+        }
+
+        // Update payment with evidence
+        $payment->update([
+            'payment_evidence' => $evidencePath,
+            'payment_note' => $request->payment_note,
+            'status' => 'submitted', // New status for submitted evidence
+            'gateway_response' => [
+                'evidence_uploaded' => true,
+                'uploaded_at' => now(),
+                'file_type' => $request->file('payment_evidence')->getClientOriginalExtension()
+            ]
         ]);
 
-        // Redirect to placeholder payment gateway
-        return redirect()->route('student.payment.gateway', ['payment' => $payment]);
-    }
+        $user->update([
+            'registration_stage' => 'completed'
+        ]);
 
-    public function paymentGateway(Payment $payment)
-    {
-        return view('student.registration.payment-gateway', compact('payment'));
-    }
-
-    public function confirmPayment(Request $request, Payment $payment)
-    {
-        // Placeholder payment processing
-        $success = $request->has('simulate_success');
-
-        if ($success) {
-            $payment->update([
-                'status' => 'success',
-                'paid_at' => now(),
-                'gateway_response' => ['status' => 'success', 'reference' => 'REF_' . time()]
-            ]);
-
-            $payment->user->update([
-                'payment_status' => 'paid',
-                'registration_stage' => 'completed'
-            ]);
-
-            // Send payment confirmation email
-            if ($payment->user->email) {
-                $notificationService = app(\App\Services\NotificationService::class);
-                $notificationService->sendPaymentConfirmation($payment->user, $payment);
-            }
-
-            session()->forget('registration_user_id');
-            return redirect()->route('student.status')->with('success', 'Payment successful! Your registration is complete.');
-        } else {
-            $payment->update([
-                'status' => 'failed',
-                'gateway_response' => ['status' => 'failed', 'message' => 'Payment failed']
-            ]);
-
-            return redirect()->route('student.payment')->with('error', 'Payment failed. Please try again.');
+        // Send notification email if needed
+        if ($user->email) {
+            $notificationService = app(\App\Services\NotificationService::class);
+            $notificationService->sendPaymentSubmittedConfirmation($user, $payment);
         }
+
+        session()->forget('registration_user_id');
+        return redirect()->route('student.status')->with('success', 'Payment evidence submitted successfully! Your application will be subject to review within 24 hours.');
     }
 
     public function status()

@@ -1,0 +1,322 @@
+---controllers
+<?php
+
+
+namespace App\Http\Controllers\Admin;
+
+use App\Http\Controllers\Controller;
+use App\Models\User;
+use Illuminate\Http\Request;
+
+class UserController extends Controller
+{
+    public function index(Request $request)
+    {
+        $query = User::with(['application', 'payments']);
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('first_name', 'like', "%{$search}%")
+                  ->orWhere('last_name', 'like', "%{$search}%")
+                  ->orWhere('phone_number', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('payment_status')) {
+            $query->where('payment_status', $request->payment_status);
+        }
+
+        if ($request->filled('application_status')) {
+            $query->where('application_status', $request->application_status);
+        }
+
+        $users = $query->paginate(15);
+
+        return view('admin.users.index', compact('users'));
+    }
+
+    public function show(User $user)
+    {
+        $user->load(['application', 'payments', 'notifications']);
+        return view('admin.users.show', compact('user'));
+    }
+
+    public function updateApplicationStatus(Request $request, User $user)
+    {
+        $request->validate([
+            'application_status' => 'required|in:pending,reviewing,accepted,rejected'
+        ]);
+
+        $oldStatus = $user->application_status;
+        $user->update(['application_status' => $request->application_status]);
+
+        // Send notification if status changed and user has email
+        if ($oldStatus !== $request->application_status && $user->email) {
+            $notificationService = app(\App\Services\NotificationService::class);
+            $notificationService->sendApplicationStatusUpdate($user, $request->application_status);
+        }
+
+        return back()->with('success', 'Application status updated successfully.');
+    }
+}
+
+
+---views
+@extends('layouts.admin')
+
+@section('title', 'Students Management')
+
+@section('content')
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <div class="card-head-row">
+                    <div class="card-title">Students Management</div>
+                    <div class="card-tools">
+                        <a href="{{ route('admin.import.index') }}" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-file-import me-2"></i>Import Data
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <div class="d-flex align-items-center">
+            <h4 class="card-title">All Students</h4>
+            <div class="ml-auto">
+                <form method="GET" class="form-inline">
+                    <div class="input-group input-group-sm">
+                        <input type="text" name="search" class="form-control" 
+                               placeholder="Search students..." value="{{ request('search') }}">
+                        <select name="payment_status" class="form-control">
+                            <option value="">All Payments</option>
+                            <option value="pending" {{ request('payment_status') == 'pending' ? 'selected' : '' }}>Pending</option>
+                            <option value="paid" {{ request('payment_status') == 'paid' ? 'selected' : '' }}>Paid</option>
+                        </select>
+                        <select name="application_status" class="form-control">
+                            <option value="">All Applications</option>
+                            <option value="pending" {{ request('application_status') == 'pending' ? 'selected' : '' }}>Pending</option>
+                            <option value="reviewing" {{ request('application_status') == 'reviewing' ? 'selected' : '' }}>Reviewing</option>
+                            <option value="accepted" {{ request('application_status') == 'accepted' ? 'selected' : '' }}>Accepted</option>
+                            <option value="rejected" {{ request('application_status') == 'rejected' ? 'selected' : '' }}>Rejected</option>
+                        </select>
+                        <div class="input-group-append">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-filter me-1"></i>Filter
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Phone</th>
+                        <th>Email</th>
+                        <th>School</th>
+                        <th>Payment Status</th>
+                        <th>Application Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($users as $user)
+                        <tr>
+                            <td>{{ $user->full_name }}</td>
+                            <td>{{ $user->phone_number }}</td>
+                            <td>{{ $user->email ?: 'N/A' }}</td>
+                            <td>{{ $user->school ?: 'N/A' }}</td>
+                            <td>
+                                <span class="badge badge-{{ $user->payment_status == 'paid' ? 'success' : 'warning' }}">
+                                    {{ ucfirst($user->payment_status) }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge badge-{{ $user->application_status == 'accepted' ? 'success' : ($user->application_status == 'rejected' ? 'danger' : 'warning') }}">
+                                    {{ ucfirst($user->application_status) }}
+                                </span>
+                            </td>
+                            <td>
+                                <a href="{{ route('admin.users.show', $user) }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-eye me-1"></i>View
+                                </a>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="7" class="text-center py-4">No students found</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+        
+        @if($users->hasPages())
+            <div class="card-footer">
+                {{ $users->links() }}
+            </div>
+        @endif
+    </div>
+</div>
+@endsection
+
+
+
+----
+@extends('layouts.admin')
+
+@section('title', 'Student Details')
+
+@section('content')
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <div class="card-head-row">
+                    <div class="card-title">Student Details: {{ $user->full_name }}</div>
+                    <div class="card-tools">
+                        <a href="{{ route('admin.users.index') }}" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-arrow-left me-2"></i>Back to List
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <div class="card-head-row">
+                    <div class="card-title">Student Information</div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label"><strong>Phone Number</strong></label>
+                            <p>{{ $user->phone_number }}</p>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label"><strong>Email Address</strong></label>
+                            <p>{{ $user->email ?: 'N/A' }}</p>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label"><strong>School</strong></label>
+                            <p>{{ $user->school ?: 'N/A' }}</p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label"><strong>Matriculation Number</strong></label>
+                            <p>{{ $user->matriculation_number ?: 'N/A' }}</p>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label"><strong>Address</strong></label>
+                            <p>{{ $user->address ?: 'N/A' }}</p>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label"><strong>Registration Stage</strong></label>
+                            <p>{{ ucfirst(str_replace('_', ' ', $user->registration_stage)) }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                @if($user->application)
+                    <hr>
+                    <div class="form-group">
+                        <label class="form-label"><strong>Need Assessment</strong></label>
+                        <div class="border rounded p-3 bg-light">
+                            {{ $user->application->need_assessment_text ?: 'Not provided' }}
+                        </div>
+                    </div>
+                @endif
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <div class="card-head-row">
+                    <div class="card-title">Application Status</div>
+                </div>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ route('admin.users.update-status', $user) }}">
+                    @csrf
+                    @method('PATCH')
+                    <div class="form-group">
+                        <label class="form-label"><strong>Current Status</strong></label>
+                        <div class="mb-2">
+                            <span class="badge badge-{{ $user->application_status == 'accepted' ? 'success' : ($user->application_status == 'rejected' ? 'danger' : 'warning') }}">
+                                {{ ucfirst($user->application_status) }}
+                            </span>
+                        </div>
+                        
+                        <label class="form-label">Update Status</label>
+                        <select name="application_status" class="form-control">
+                            <option value="pending" {{ $user->application_status == 'pending' ? 'selected' : '' }}>Pending</option>
+                            <option value="reviewing" {{ $user->application_status == 'reviewing' ? 'selected' : '' }}>Reviewing</option>
+                            <option value="accepted" {{ $user->application_status == 'accepted' ? 'selected' : '' }}>Accepted</option>
+                            <option value="rejected" {{ $user->application_status == 'rejected' ? 'selected' : '' }}>Rejected</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <i class="fas fa-save me-2"></i>Update Status
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <div class="card-head-row">
+                    <div class="card-title">Payment Information</div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label class="form-label"><strong>Payment Status</strong></label>
+                    <div>
+                        <span class="badge badge-{{ $user->payment_status == 'paid' ? 'success' : 'warning' }}">
+                            {{ ucfirst($user->payment_status) }}
+                        </span>
+                    </div>
+                </div>
+                
+                @if($user->payments->count() > 0)
+                    <hr>
+                    <label class="form-label"><strong>Payment History</strong></label>
+                    @foreach($user->payments as $payment)
+                        <div class="border rounded p-2 mb-2">
+                            <div class="d-flex justify-content-between">
+                                <strong>₦{{ number_format($payment->amount) }}</strong>
+                                <span class="badge badge-{{ $payment->status == 'success' ? 'success' : ($payment->status == 'failed' ? 'danger' : 'warning') }}">
+                                    {{ $payment->status }}
+                                </span>
+                            </div>
+                            <small class="text-muted">{{ $payment->created_at->format('M d, Y H:i') }}</small>
+                        </div>
+                    @endforeach
+                @endif
+            </div>
+        </div>
+    </div>
+</div>
+@endsection

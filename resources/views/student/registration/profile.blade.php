@@ -124,7 +124,7 @@
 
     <div class="d-grid mt-4">
         <button type="submit" class="btn btn-primary btn-lg">
-            <i class="fas fa-arrow-right me-2"></i>Continue to Payment
+            <i class="fas fa-arrow-right me-2"></i>Complete Registration
         </button>
     </div>
 </form>

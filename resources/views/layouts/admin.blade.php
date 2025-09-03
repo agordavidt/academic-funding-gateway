@@ -70,13 +70,13 @@
           <!-- Logo Header -->
           <div class="logo-header" data-background-color="dark">
             <a href="{{ route('admin.dashboard') }}" class="logo d-flex align-items-center">
-              <img
+              <!-- <img
                 src="{{ asset('assets/img/logo.png') }}"
                 alt="AFG Logo"
                 class="navbar-brand"
                 height="40"
                 width="40"
-              />
+              /> -->
               <span class="app-name ms-2">AFG Admin</span>
             </a>
             <div class="nav-toggle">
@@ -174,8 +174,7 @@
                     href="#"
                     aria-expanded="false"
                   >                   
-                    <span class="profile-username">
-                      <span class="op-7">Hi,</span>
+                    <span class="profile-username">                      
                       <span class="fw-bold">{{ Auth::guard('admin')->user()->name ?? 'Admin' }}</span>
                     </span>
                   </a>
@@ -183,29 +182,24 @@
                     <div class="dropdown-user-scroll scrollbar-outer">
                       <li>
                         <div class="user-box">
-                          <div class="avatar-lg">
-                            <img
-                              src="{{ Auth::guard('admin')->user()->avatar ?? asset('assets/img/default-avatar.png') }}"
-                              alt="Admin Profile"
-                              class="avatar-img rounded"
-                            />
+                          <div class="avatar-lg">                            
                           </div>
                           <div class="u-text">
                             <h4>{{ Auth::guard('admin')->user()->name ?? 'Admin User' }}</h4>
                             <p class="text-muted">{{ Auth::guard('admin')->user()->email ?? 'admin@afg.com' }}</p>
-                            <a
+                            <!-- <a
                               href="#"
                               class="btn btn-xs btn-secondary btn-sm"
                               >View Profile</a
-                            >
+                            > -->
                           </div>
                         </div>
                       </li>
                       <li>
-                        <div class="dropdown-divider"></div>
+                        <!-- <div class="dropdown-divider"></div>
                         <a class="dropdown-item" href="#"><i class="fas fa-user me-2"></i>My Profile</a>
                         <a class="dropdown-item" href="#"><i class="fas fa-cog me-2"></i>Account Settings</a>
-                        <div class="dropdown-divider"></div>
+                        <div class="dropdown-divider"></div> -->
                         <form action="{{ route('admin.logout') }}" method="POST" id="logout-form">
                             @csrf
                             <a class="dropdown-item" href="#"

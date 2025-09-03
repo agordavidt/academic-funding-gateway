@@ -20,5 +20,8 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         //
+        $this->app->singleton(SmsService::class, function ($app) {
+            return new SmsService();
+        });
     }
 }
