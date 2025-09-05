@@ -154,24 +154,30 @@
                         </div>
                     </div>
 
+                    <!-- Fixed Payment Approval Section in user show view -->
                     @if($payment->status === 'submitted')
                     <hr>
-                    <div class="d-flex gap-2">
-                        <form method="POST" action="{{ route('admin.users.approve-payment', $user) }}" class="d-inline">
-                            @csrf
-                            <div class="input-group input-group-sm mb-2">
-                                <input type="text" name="approval_note" class="form-control" 
-                                       placeholder="Approval note (optional)" maxlength="200">
-                                <button type="submit" class="btn btn-success btn-sm">
-                                    <i class="fas fa-check me-1"></i>Approve Payment
-                                </button>
-                            </div>
-                        </form>
+                    <div class="row">
+                        <div class="col-12">
+                            <!-- Approval Form -->
+                            <form method="POST" action="{{ route('admin.users.approve-payment', $user) }}" class="mb-2">
+                                @csrf
+                                <div class="input-group input-group-sm mb-2">
+                                    <input type="text" name="approval_note" class="form-control" 
+                                        placeholder="Approval note (optional)" maxlength="200">
+                                    <button type="submit" class="btn btn-success">
+                                        <i class="fas fa-check me-1"></i>Approve Payment
+                                    </button>
+                                </div>
+                            </form>
+                            
+                            <!-- Reject Button -->
+                            <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" 
+                                    data-bs-target="#rejectModal{{ $payment->id }}">
+                                <i class="fas fa-times me-1"></i>Reject Payment
+                            </button>
+                        </div>
                     </div>
-                    <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" 
-                            data-bs-target="#rejectModal{{ $payment->id }}">
-                        <i class="fas fa-times me-1"></i>Reject Payment
-                    </button>
 
                     <!-- Rejection Modal -->
                     <div class="modal fade" id="rejectModal{{ $payment->id }}" tabindex="-1">
@@ -187,8 +193,8 @@
                                         <div class="form-group">
                                             <label for="rejectionReason{{ $payment->id }}" class="form-label">Reason for Rejection</label>
                                             <textarea class="form-control" id="rejectionReason{{ $payment->id }}" 
-                                                      name="rejection_reason" rows="3" required 
-                                                      placeholder="Please provide a clear reason for rejecting this payment..."></textarea>
+                                                    name="rejection_reason" rows="3" required 
+                                                    placeholder="Please provide a clear reason for rejecting this payment..."></textarea>
                                         </div>
                                         <div class="alert alert-warning">
                                             <i class="fas fa-exclamation-triangle me-2"></i>
