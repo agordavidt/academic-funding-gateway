@@ -7,7 +7,9 @@ use App\Models\User;
 use App\Models\Payment;
 use App\Services\NotificationService;
 use App\Services\SmsService;
+use Exception;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class UserController extends Controller
 {
@@ -29,9 +31,9 @@ class UserController extends Controller
             $search = $request->search;
             $query->where(function($q) use ($search) {
                 $q->where('first_name', 'like', "%{$search}%")
-                  ->orWhere('last_name', 'like', "%{$search}%")
-                  ->orWhere('phone_number', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%");
+                    ->orWhere('last_name', 'like', "%{$search}%")
+                    ->orWhere('phone_number', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%");
             });
         }
 
@@ -59,10 +61,10 @@ class UserController extends Controller
 
         // Get unique schools for filter dropdown
         $schools = User::whereNotNull('school')
-                      ->distinct()
-                      ->pluck('school')
-                      ->sort()
-                      ->values();
+                        ->distinct()
+                        ->pluck('school')
+                        ->sort()
+                        ->values();
 
         return view('admin.users.index', compact('users', 'schools'));
     }
@@ -88,10 +90,19 @@ class UserController extends Controller
 
         // Send notification if status changed
         if ($oldStatus !== $request->application_status) {
-            $this->notificationService->sendApplicationStatusUpdate($user, $request->application_status);
+            try {
+                $this->notificationService->sendApplicationStatusUpdate($user, $request->application_status);
+                return back()->with('success', 'Application status updated successfully. Notifications sent to user.');
+            } catch (Exception $e) {
+                Log::error('Failed to send application status update notification: ' . $e->getMessage(), [
+                    'user_id' => $user->id,
+                    'status' => $request->application_status
+                ]);
+                return back()->with('warning', 'Application status updated, but notification failed. Error: ' . $e->getMessage());
+            }
         }
-
-        return back()->with('success', 'Application status updated successfully. Notifications sent to user.');
+    
+        return back()->with('success', 'Application status updated successfully. No notification sent as status did not change.');
     }
 
     public function approvePayment(Request $request, User $user)
@@ -117,9 +128,16 @@ class UserController extends Controller
         ]);
 
         // Send payment approval notification (email + SMS)
-        $this->notificationService->sendPaymentApproved($user, $payment);
-
-        return back()->with('success', 'Payment approved successfully. User has been notified via email and SMS.');
+        try {
+            $this->notificationService->sendPaymentApproved($user, $payment);
+            return back()->with('success', 'Payment approved successfully. User has been notified via email and SMS.');
+        } catch (Exception $e) {
+            Log::error('Failed to send payment approval notification: ' . $e->getMessage(), [
+                'user_id' => $user->id,
+                'payment_id' => $payment->id
+            ]);
+            return back()->with('warning', 'Payment approved, but notification failed. Error: ' . $e->getMessage());
+        }
     }
 
     public function rejectPayment(Request $request, User $user)
@@ -144,9 +162,16 @@ class UserController extends Controller
         ]);
 
         // Send payment rejection notification (email + SMS)
-        $this->notificationService->sendPaymentRejected($user, $payment, $request->rejection_reason);
-
-        return back()->with('success', 'Payment rejected. User has been notified via email and SMS.');
+        try {
+            $this->notificationService->sendPaymentRejected($user, $payment, $request->rejection_reason);
+            return back()->with('success', 'Payment rejected. User has been notified via email and SMS.');
+        } catch (Exception $e) {
+            Log::error('Failed to send payment rejection notification: ' . $e->getMessage(), [
+                'user_id' => $user->id,
+                'payment_id' => $payment->id
+            ]);
+            return back()->with('warning', 'Payment rejected, but notification failed. Error: ' . $e->getMessage());
+        }
     }
 
     public function assignTrainingInstitution(Request $request, User $user)
@@ -163,9 +188,16 @@ class UserController extends Controller
         ]);
 
         // Send training assignment notification
-        $this->notificationService->sendTrainingAssignment($user, $trainingInstitution);
-
-        return back()->with('success', 'Training institution assigned successfully. User has been notified.');
+        try {
+            $this->notificationService->sendTrainingAssignment($user, $trainingInstitution);
+            return back()->with('success', 'Training institution assigned successfully. User has been notified.');
+        } catch (Exception $e) {
+            Log::error('Failed to send training assignment notification: ' . $e->getMessage(), [
+                'user_id' => $user->id,
+                'institution_id' => $trainingInstitution->id
+            ]);
+            return back()->with('warning', 'Training institution assigned, but notification failed. Error: ' . $e->getMessage());
+        }
     }
 
     public function sendSms(Request $request, User $user)
@@ -178,12 +210,22 @@ class UserController extends Controller
             return back()->with('error', 'User does not have a valid phone number.');
         }
 
-        $result = $this->notificationService->sendCustomSms($user, $request->message);
+        try {
+            $result = $this->notificationService->sendCustomSms($user, $request->message);
 
-        if ($result['success']) {
-            return back()->with('success', 'SMS sent successfully to ' . $user->phone_number);
-        } else {
-            return back()->with('error', 'Failed to send SMS: ' . $result['message']);
+            if ($result['success']) {
+                return back()->with('success', 'SMS sent successfully to ' . $user->phone_number);
+            } else {
+                // The service itself returned a failure, which is a handled error
+                return back()->with('error', 'Failed to send SMS: ' . $result['message']);
+            }
+        } catch (Exception $e) {
+            // A genuine unhandled exception occurred, like a network error
+            Log::error('An exception occurred while trying to send custom SMS: ' . $e->getMessage(), [
+                'user_id' => $user->id,
+                'phone' => $user->phone_number
+            ]);
+            return back()->with('error', 'An unexpected error occurred while sending SMS. Please check the logs.');
         }
     }
 
@@ -236,15 +278,23 @@ class UserController extends Controller
         }
 
         // Send bulk SMS
-        $result = $this->notificationService->sendBulkSms($users->toArray(), $request->message);
+        try {
+            $result = $this->notificationService->sendBulkSms($users->toArray(), $request->message);
 
-        if ($result['success']) {
-            $message = "Bulk SMS sent successfully to {$result['total']} users.";
-        } else {
-            $message = "Bulk SMS failed: {$result['message']}";
+            if ($result['success']) {
+                $message = "Bulk SMS sent successfully to {$result['total']} users.";
+            } else {
+                $message = "Bulk SMS failed: {$result['message']}";
+            }
+
+            return back()->with($result['success'] ? 'success' : 'error', $message);
+        } catch (Exception $e) {
+            Log::error('An exception occurred while trying to send bulk SMS: ' . $e->getMessage(), [
+                'recipients' => $request->recipients,
+                'school_filter' => $request->school_filter
+            ]);
+            return back()->with('error', 'An unexpected error occurred while sending bulk SMS. Please check the logs.');
         }
-
-        return back()->with($result['success'] ? 'success' : 'error', $message);
     }
 
     public function getSmsBalance()
@@ -261,10 +311,10 @@ class UserController extends Controller
     {
         $balance = $this->smsService->getBalance();
         $recentSms = \App\Models\Notification::where('type', 'LIKE', '%sms%')
-                                           ->with('user')
-                                           ->latest()
-                                           ->take(20)
-                                           ->get();
+                                            ->with('user')
+                                            ->latest()
+                                            ->take(20)
+                                            ->get();
 
         return view('admin.sms.settings', compact('balance', 'recentSms'));
     }
@@ -276,11 +326,21 @@ class UserController extends Controller
             'message' => 'required|string|max:160'
         ]);
 
-        $result = $this->smsService->sendSms($request->phone_number, $request->message);
+        try {
+            $result = $this->smsService->sendSms($request->phone_number, $request->message);
 
-        return response()->json([
-            'success' => $result['success'],
-            'message' => $result['message']
-        ]);
+            return response()->json([
+                'success' => $result['success'],
+                'message' => $result['message']
+            ]);
+        } catch (Exception $e) {
+            Log::error('An exception occurred while trying to send test SMS: ' . $e->getMessage(), [
+                'phone' => $request->phone_number
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'An unexpected error occurred while sending the test SMS.'
+            ], 500);
+        }
     }
 }
