@@ -1,42 +1,44 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
+<head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <title>@yield('title', 'Student Registration') - Academic Funding Gateway</title>
     <meta content="width=device-width, initial-scale=1.0, shrink-to-fit=no" name="viewport" />
     
-    <!-- Fonts and icons -->
-    <script src="{{asset('assets/js/plugin/webfont/webfont.min.js')}}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/webfontloader@1.6.28/webfontloader.js"></script>
     <script>
       WebFont.load({
         google: { families: ["Public Sans:300,400,500,600,700"] },
-        custom: {
-          families: [
-            "Font Awesome 5 Solid",
-            "Font Awesome 5 Regular",
-            "Font Awesome 5 Brands",
-            "simple-line-icons",
-          ],
-          urls: ["{{ asset('assets/css/fonts.min.css') }}"],
-        },
         active: function () {
           sessionStorage.fonts = true;
-        },
+        }
       });
     </script>
-
-    <!-- CSS Files -->
-    <link rel="stylesheet" href="{{ asset('assets/css/bootstrap.min.css')}}" />
-    <link rel="stylesheet" href="{{ asset('assets/css/plugins.min.css')}}" />
-    <link rel="stylesheet" href="{{ asset('assets/css/kaiadmin.min.css')}}" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     
     <style>
+        :root {
+            --color-light-background: #f9f7f0;
+            --color-primary: #18b7be;
+            --color-secondary: #178ca4;
+            --color-dark: #072a40;
+        }
+
+        body {
+            font-family: 'Public Sans', sans-serif;
+            background-color: var(--color-light-background);
+            color: var(--color-dark);
+        }
+        
         .registration-container {
             min-height: 100vh;
-            background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
+            background-color: var(--color-light-background);
             display: flex;
             align-items: center;
+            justify-content: center;
             padding: 2rem 0;
         }
         
@@ -69,12 +71,12 @@
         }
 
         .step.active {
-            background: #4e73df;
+            background-color: var(--color-primary);
             color: white;
         }
-
+        
         .step.completed {
-            background: #1cc88a;
+            background-color: var(--color-secondary);
             color: white;
         }
 
@@ -86,7 +88,7 @@
         }
 
         .step-connector.completed {
-            background: #1cc88a;
+            background-color: var(--color-secondary);
         }
         
         .app-logo {
@@ -94,13 +96,8 @@
             margin-bottom: 2rem;
         }
         
-        .app-logo img {
-            height: 60px;
-            margin-bottom: 1rem;
-        }
-        
         .app-logo h2 {
-            color: #4e73df;
+            color: var(--color-dark);
             font-weight: 600;
             margin-bottom: 0.5rem;
         }
@@ -109,40 +106,63 @@
             color: #6e707e;
             font-size: 0.9rem;
         }
+        
+        .btn-primary {
+            background-color: var(--color-primary);
+            border-color: var(--color-primary);
+        }
+        
+        .btn-primary:hover {
+            background-color: var(--color-secondary);
+            border-color: var(--color-secondary);
+        }
+
+        .input-group-text {
+            background-color: #f8f9fa;
+            border-right: 0;
+            color: var(--color-secondary);
+        }
+
+        .form-control {
+            border-left: 0;
+        }
+
+        .form-control:focus {
+            box-shadow: 0 0 0 0.25rem rgba(24, 183, 190, 0.25);
+        }
+
     </style>
-  </head>
-  <body>
+</head>
+<body>
     <div class="registration-container">
         <div class="container">
             <div class="row justify-content-center">
                 <div class="col-md-8 col-lg-6">
                     <div class="registration-card">
-                        <div class="app-logo">                           
-                            <h2>Academic Funding Gateway</h2>
-                            <p>Grant Registration Portal</p>
+                        <div class="app-logo">
+                            <h2 class="fw-bold">Academic Funding Gateway</h2>
+                            <p class="text-muted">Grant Registration Portal</p>
                         </div>
 
+                        {{-- Alert messages --}}
                         @if(session('success'))
                             <div class="alert alert-success alert-dismissible fade show" role="alert">
                                 <i class="fas fa-check-circle me-2"></i>{{ session('success') }}
                                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                             </div>
                         @endif
-
                         @if(session('error'))
                             <div class="alert alert-danger alert-dismissible fade show" role="alert">
                                 <i class="fas fa-exclamation-circle me-2"></i>{{ session('error') }}
                                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                             </div>
                         @endif
-
                         @if(session('info'))
                             <div class="alert alert-info alert-dismissible fade show" role="alert">
                                 <i class="fas fa-info-circle me-2"></i>{{ session('info') }}
                                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                             </div>
                         @endif
-
                         @yield('content')
                     </div>
                 </div>
@@ -150,20 +170,18 @@
         </div>
     </div>
 
-    <!-- Core JS Files -->
-    <script src="{{asset('assets/js/core/jquery-3.7.1.min.js')}}"></script>
-    <script src="{{asset('assets/js/core/popper.min.js')}}"></script>
-    <script src="{{asset('assets/js/core/bootstrap.min.js')}}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
     <script>
         // Auto-hide alerts after 5 seconds
         setTimeout(function() {
             const alerts = document.querySelectorAll('.alert');
             alerts.forEach(alert => {
-                const bsAlert = new bootstrap.Alert(alert);
+                const bsAlert = bootstrap.Alert.getOrCreateInstance(alert);
                 bsAlert.close();
             });
         }, 5000);
     </script>
-  </body>
+    @stack('scripts')
+</body>
 </html>

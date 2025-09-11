@@ -11,7 +11,7 @@
     <div class="step">3</div>
 </div>
 
-<h4 class="text-center mb-4">Verify Your Phone Number</h4>
+
 
 <form method="POST" action="{{ route('student.verify-phone') }}">
     @csrf
