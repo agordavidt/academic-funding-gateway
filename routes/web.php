@@ -32,9 +32,10 @@ Route::prefix('admin')->name('admin.')->middleware(['admin.auth'])->group(functi
     Route::post('/users/{user}/sms', [UserController::class, 'sendSms'])->name('users.send-sms');
     Route::post('/users/bulk-sms', [UserController::class, 'bulkSms'])->name('users.bulk-sms');
     
-    // Data Import
+    // Data Import & Manual Creation
     Route::get('/import', [DataImportController::class, 'index'])->name('import.index');
     Route::post('/import/upload', [DataImportController::class, 'upload'])->name('import.upload');
+    Route::post('/import/create', [DataImportController::class, 'create'])->name('import.create');
 });
 
 // Student Routes
@@ -51,8 +52,7 @@ Route::prefix('student')->name('student.')->group(function () {
     Route::get('/status', [RegistrationController::class, 'status'])->name('status');
 });
 
-// Payment webhook (can be kept for future integrations or removed)
-Route::post('/payment/webhook', [PaymentController::class, 'webhook'])->name('payment.webhook');
+
 
 // Redirect root to student registration
 Route::get('/', function () {

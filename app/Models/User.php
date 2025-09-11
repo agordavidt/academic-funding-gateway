@@ -36,6 +36,18 @@ class User extends Authenticatable
     ];
 
     /**
+     * Mutator to clean and format the phone number before saving.
+     * This handles both manual and imported data.
+     *
+     * @param  string  $value
+     * @return void
+     */
+    public function setPhoneNumberAttribute($value)
+    {
+        $this->attributes['phone_number'] = self::cleanPhoneNumberStatic($value);
+    }
+    
+    /**
      * Route notifications for the Africa's Talking channel.
      *
      * @param  \Illuminate\Notifications\Notification  $notification
@@ -43,36 +55,45 @@ class User extends Authenticatable
      */
     public function routeNotificationForAfricasTalking($notification)
     {
-        // Clean and format the phone number
-        if ($this->phone_number) {
-            return $this->cleanPhoneNumber($this->phone_number);
-        }
-        
-        return null;
+        // The phone number is already clean due to the mutator
+        return $this->phone_number;
     }
 
     /**
-     * Clean and format phone number for Nigerian numbers
+     * Static method to clean and format phone numbers.
+     *
+     * @param string $phoneNumber
+     * @return string
      */
-    protected function cleanPhoneNumber($phoneNumber)
+    public static function cleanPhoneNumberStatic($phoneNumber)
     {
         // Remove all non-numeric characters
         $phone = preg_replace('/[^0-9]/', '', $phoneNumber);
-        
-        // Convert Nigerian numbers to international format
+
+        // Check if the number is already in the international format
+        if (substr($phone, 0, 4) === '+234') {
+            return $phone; // It's already correctly formatted
+        }
+
+        // Add the country code if it starts with '0'
         if (substr($phone, 0, 1) === '0') {
-            $phone = '+234' . substr($phone, 1);
-        } elseif (substr($phone, 0, 3) === '234') {
-            $phone = '+' . $phone;
-        } elseif (substr($phone, 0, 4) !== '+234') {
-            // Assume it's a Nigerian number without country code
-            $phone = '+234' . $phone;
+            return '+234' . substr($phone, 1);
         }
         
-        return $phone;
+        // Add the country code if it starts with '234'
+        if (substr($phone, 0, 3) === '234') {
+            return '+' . $phone;
+        }
+
+        // If it's a 10-digit number without a leading zero, assume it's a Nigerian number and add +234
+        if (strlen($phone) === 10) {
+            return '+234' . $phone;
+        }
+
+        return $phone; // Return as-is if none of the patterns match
     }
 
-    /**
+   /**
      * Get the user's full name
      */
     public function getFullNameAttribute()
@@ -140,4 +161,5 @@ class User extends Authenticatable
     {
         return $query->where('school', 'like', "%{$school}%");
     }
+
 }

@@ -1,50 +1,571 @@
--- migrations
+-- migrations:
+
+        Schema::create('users', function (Blueprint $table) {
+            $table->id();
+            $table->string('phone_number')->unique();
+            $table->string('email')->unique()->nullable();
+            $table->string('first_name');
+            $table->string('last_name');           
+            $table->string('school')->nullable();
+            $table->string('matriculation_number')->nullable();
+            $table->enum('registration_stage', ['imported', 'profile_completion', 'payment', 'completed'])->default('imported');
+            $table->enum('payment_status', ['pending', 'paid'])->default('pending');
+            $table->enum('application_status', ['pending', 'reviewing', 'accepted', 'rejected'])->default('pending');
+            $table->timestamp('email_verified_at')->nullable();
+            $table->string('password')->nullable();
+            $table->rememberToken();
+            $table->timestamps();
+        });
+   
+
+
+    public function up()
+    {
+        Schema::create('applications', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('user_id')->constrained()->onDelete('cascade');
+            $table->text('need_assessment_text')->nullable();
+            $table->timestamp('terms_agreed_at')->nullable();
+            $table->timestamps();
+        });
+    }
+-- models
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
+
+class User extends Authenticatable
+{
+    use HasApiTokens, HasFactory, Notifiable;
+
+    protected $fillable = [
+        'first_name',
+        'last_name',
+        'email',
+        'phone_number',
+        'school',
+        'matriculation_number',
+        'application_status',
+        'payment_status',
+        'registration_stage',
+        'email_verified_at',
+        'password',
+    ];
+
+    protected $hidden = [
+        'password',
+        'remember_token',
+    ];
+
+    protected $casts = [
+        'email_verified_at' => 'datetime',
+        'password' => 'hashed',
+    ];
+
+    /**
+     * Route notifications for the Africa's Talking channel.
+     *
+     * @param  \Illuminate\Notifications\Notification  $notification
+     * @return string
+     */
+    public function routeNotificationForAfricasTalking($notification)
+    {
+        // Clean and format the phone number
+        if ($this->phone_number) {
+            return $this->cleanPhoneNumber($this->phone_number);
+        }
+        
+        return null;
+    }
+
+    /**
+     * Clean and format phone number for Nigerian numbers
+     */
+    protected function cleanPhoneNumber($phoneNumber)
+    {
+        // Remove all non-numeric characters
+        $phone = preg_replace('/[^0-9]/', '', $phoneNumber);
+        
+        // Convert Nigerian numbers to international format
+        if (substr($phone, 0, 1) === '0') {
+            $phone = '+234' . substr($phone, 1);
+        } elseif (substr($phone, 0, 3) === '234') {
+            $phone = '+' . $phone;
+        } elseif (substr($phone, 0, 4) !== '+234') {
+            // Assume it's a Nigerian number without country code
+            $phone = '+234' . $phone;
+        }
+        
+        return $phone;
+    }
+
+    /**
+     * Get the user's full name
+     */
+    public function getFullNameAttribute()
+    {
+        return $this->first_name . ' ' . $this->last_name;
+    }
+
+    /**
+     * Check if user has a valid phone number for SMS
+     */
+    public function hasValidPhoneNumber()
+    {
+        if (!$this->phone_number) {
+            return false;
+        }
+
+        $cleaned = $this->cleanPhoneNumber($this->phone_number);
+        // Nigerian mobile numbers should be 14 characters (+234xxxxxxxxx)
+        return preg_match('/^\+234[7-9][0-9]{9}$/', $cleaned);
+    }
+
+    /**
+     * Relationships
+     */
+    public function application()
+    {
+        return $this->hasOne(Application::class);
+    }
+
+    public function payments()
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    public function notifications()
+    {
+        return $this->hasMany(Notification::class);
+    }
+
+    public function trainingInstitution()
+    {
+        return $this->belongsTo(TrainingInstitution::class);
+    }
+
+    /**
+     * Scopes
+     */
+    public function scopeWithValidPhone($query)
+    {
+        return $query->whereNotNull('phone_number')
+                    ->where('phone_number', '!=', '');
+    }
+
+    public function scopeWithPaymentStatus($query, $status)
+    {
+        return $query->where('payment_status', $status);
+    }
+
+    public function scopeWithApplicationStatus($query, $status)
+    {
+        return $query->where('application_status', $status);
+    }
+
+    public function scopeFromSchool($query, $school)
+    {
+        return $query->where('school', 'like', "%{$school}%");
+    }
+}
+
+
+<?php
+
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Application extends Model
+{
+    use HasFactory;
+
+    protected $fillable = [
+        'user_id',
+        'need_assessment_text',
+        'terms_agreed_at',
+    ];
+
+    protected $casts = [
+        'terms_agreed_at' => 'datetime',
+    ];
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+}
 
 
 
-@extends('layouts.student')
+- student controller
+<?php
 
-@section('title', 'Registration Status')
+namespace App\Http\Controllers\Student;
 
-@section('content')
-<div class="text-center">
-    <div class="mb-4">
-        <i class="fas fa-check-circle text-success" style="font-size: 4rem;"></i>
-    </div>
+use App\Http\Controllers\Controller;
+use App\Models\User;
+use App\Models\Application;
+use App\Models\Payment;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Storage;
+
+class RegistrationController extends Controller
+{
+    public function index()
+    {
+        return view('student.registration.phone-verification');
+    }
+
+    public function verifyPhone(Request $request)
+    {
+        $request->validate([
+            'phone_number' => 'required|string|max:15'
+        ]);
+
+        $user = User::where('phone_number', $request->phone_number)->first();
+
+        if (!$user) {
+            return back()->withErrors(['phone_number' => 'Phone number not found in our records.']);
+        }
+
+        if ($user->registration_stage === 'completed') {
+            return redirect()->route('student.status')->with('info', 'Your registration is already complete.');
+        }
+
+        // Store user ID in session for the registration process
+        session(['registration_user_id' => $user->id]);
+
+        return redirect()->route('student.profile');
+    }
+
+    public function showProfile()
+    {
+        $userId = session('registration_user_id');
+        if (!$userId) {
+            return redirect()->route('student.register');
+        }
+
+        $user = User::findOrFail($userId);
+        $application = $user->application ?: new Application();
+
+        return view('student.registration.profile', compact('user', 'application'));
+    }
+
+    public function updateProfile(Request $request)
+    {
+        $userId = session('registration_user_id');
+        if (!$userId) {
+            return redirect()->route('student.register');
+        }
+
+        $user = User::findOrFail($userId);
+
+        $request->validate([
+            'email' => 'required|email|unique:users,email,' . $user->id,           
+            'school' => 'required|string|max:255',
+            'matriculation_number' => 'nullable|string|max:50',
+            'need_assessment_text' => 'required|string|max:1000',
+        ]);
+
+        // Update user information
+        $user->update([
+            'email' => $request->email,           
+            'school' => $request->school,
+            'matriculation_number' => $request->matriculation_number,
+            'registration_stage' => 'payment',
+        ]);
+
+        // Create or update application
+        $user->application()->updateOrCreate(
+            ['user_id' => $user->id],
+            ['need_assessment_text' => $request->need_assessment_text]
+        );
+
+        return redirect()->route('student.payment');
+    }
+
+    public function showPayment()
+    {
+        $userId = session('registration_user_id');
+        if (!$userId) {
+            return redirect()->route('student.register');
+        }
+
+        $user = User::findOrFail($userId);
+
+        if ($user->registration_stage !== 'payment') {
+            return redirect()->route('student.profile');
+        }
+
+        if ($user->payment_status === 'paid') {
+            return redirect()->route('student.status');
+        }
+
+        // Create payment record if it doesn't exist
+        $payment = Payment::firstOrCreate(
+            ['user_id' => $user->id, 'status' => 'pending'],
+            [
+                'transaction_id' => 'TXN_' . time() . '_' . $user->id,
+                'amount' => 3000.00,
+                'status' => 'pending',
+            ]
+        );
+
+        return view('student.registration.payment', compact('user', 'payment'));
+    }
+
+    public function processPayment(Request $request)
+    {
+        $userId = session('registration_user_id');
+        if (!$userId) {
+            return redirect()->route('student.register');
+        }
+
+        $user = User::findOrFail($userId);
+
+        $request->validate([
+            'terms_agreed' => 'required|accepted',
+            'payment_evidence' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120', // 5MB max
+            'payment_note' => 'nullable|string|max:500',
+        ]);
+
+        // Update terms agreement
+        $user->application->update([
+            'terms_agreed_at' => now()
+        ]);
+
+        // Handle file upload
+        $evidencePath = null;
+        if ($request->hasFile('payment_evidence')) {
+            $evidencePath = $request->file('payment_evidence')->store('payment_evidence', 'public');
+        }
+
+        // Find or create payment record
+        $payment = Payment::where('user_id', $user->id)->where('status', 'pending')->first();
+        if (!$payment) {
+            $payment = Payment::create([
+                'user_id' => $user->id,
+                'transaction_id' => 'TXN_' . time() . '_' . $user->id,
+                'amount' => 3000.00,
+                'status' => 'pending',
+            ]);
+        }
+
+        // Update payment with evidence
+        $payment->update([
+            'payment_evidence' => $evidencePath,
+            'payment_note' => $request->payment_note,
+            'status' => 'submitted', // New status for submitted evidence
+            'gateway_response' => [
+                'evidence_uploaded' => true,
+                'uploaded_at' => now(),
+                'file_type' => $request->file('payment_evidence')->getClientOriginalExtension()
+            ]
+        ]);
+
+        $user->update([
+            'registration_stage' => 'completed'
+        ]);
+
+        // Send notification email if needed
+        if ($user->email) {
+            $notificationService = app(\App\Services\NotificationService::class);
+            $notificationService->sendPaymentSubmittedConfirmation($user, $payment);
+        }
+
+        session()->forget('registration_user_id');
+        return redirect()->route('student.status')->with('success', 'Payment evidence submitted successfully! Your application will be subject to review within 24 hours.');
+    }
+
+    public function status()
+    {
+        return view('student.registration.status');
+    }
+}
+
+
+-- admin controller
+<?php
+
+namespace App\Http\Controllers\Admin;
+
+use App\Http\Controllers\Controller;
+use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+
+class DataImportController extends Controller
+{
+    public function index()
+    {
+        return view('admin.import.index');
+    }
+
+    public function upload(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:csv,txt,xlsx,xls|max:5120', // Increased to 5MB for Excel files
+        ]);
+
+        $file = $request->file('file');
+        $extension = $file->getClientOriginalExtension();
+        
+        $imported = 0;
+        $errors = [];
+        $data = [];
+
+        try {
+            if (in_array($extension, ['xlsx', 'xls'])) {
+                // Handle Excel files
+                $spreadsheet = IOFactory::load($file->getRealPath());
+                $worksheet = $spreadsheet->getActiveSheet();
+                $rows = $worksheet->toArray();
+                
+                // Remove empty rows
+                $rows = array_filter($rows, function($row) {
+                    return !empty(array_filter($row));
+                });
+                
+                $header = array_shift($rows);
+                $data = $rows;
+            } else {
+                // Handle CSV files
+                $fileContent = file($file->getRealPath());
+                $data = array_map('str_getcsv', $fileContent);
+                $header = array_shift($data);
+            }
+
+            // Clean header names (remove whitespace, make lowercase)
+            $header = array_map(function($col) {
+                return trim(strtolower($col));
+            }, $header);
+
+            // Process each row
+            foreach ($data as $rowIndex => $row) {
+                if (empty(array_filter($row))) {
+                    continue; // Skip empty rows
+                }
+
+                $studentData = array_combine($header, $row);
+                
+                // Validate required fields
+                if (empty($studentData['phone_number']) || empty($studentData['first_name']) || empty($studentData['last_name'])) {
+                    $errors[] = "Row " . ($rowIndex + 2) . ": Missing required fields (phone_number, first_name, last_name)";
+                    continue;
+                }
+
+                try {
+                    // Check if user already exists
+                    $existingUser = User::where('phone_number', $studentData['phone_number'])->first();
+                    if ($existingUser) {
+                        $errors[] = "Row " . ($rowIndex + 2) . ": Phone number {$studentData['phone_number']} already exists";
+                        continue;
+                    }
+
+                    User::create([
+                        'phone_number' => trim($studentData['phone_number']),
+                        'first_name' => trim($studentData['first_name']),
+                        'last_name' => trim($studentData['last_name']),
+                        'email' => !empty($studentData['email']) ? trim($studentData['email']) : null,
+                        'school' => !empty($studentData['school']) ? trim($studentData['school']) : null,
+                        'matriculation_number' => !empty($studentData['matriculation_number']) ? trim($studentData['matriculation_number']) : null,                       
+                        'password' => Hash::make('password123'), // Default password
+                    ]);
+                    $imported++;
+                } catch (\Exception $e) {
+                    $errors[] = "Row " . ($rowIndex + 2) . ": " . $e->getMessage();
+                }
+            }
+
+        } catch (\Exception $e) {
+            return back()->with([
+                'error' => "Failed to process file: " . $e->getMessage()
+            ]);
+        }
+
+        $message = "Successfully imported {$imported} students.";
+        if (count($errors) > 0) {
+            $message .= " " . count($errors) . " rows had errors.";
+        }
+
+        return back()->with([
+            'success' => $message,
+            'import_errors' => $errors // Changed from 'errors' to avoid conflict with Laravel's validation errors
+        ]);
+    }
+}
+
+
+-- routes
+<?php
+
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Admin\AuthController;
+use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\DataImportController;
+use App\Http\Controllers\Student\RegistrationController;
+use App\Http\Controllers\Student\PaymentController;
+
+// Admin Authentication Routes (No middleware protection)
+Route::prefix('admin')->name('admin.')->group(function () {
+    Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
+    Route::post('/login', [AuthController::class, 'login'])->name('login.post');
+    Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+});
+
+// Protected Admin Routes
+Route::prefix('admin')->name('admin.')->middleware(['admin.auth'])->group(function () {
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     
-    <h4 class="text-success mb-3">Registration Complete!</h4>
+    // User Management
+    Route::get('/users', [UserController::class, 'index'])->name('users.index');
+    Route::get('/users/{user}', [UserController::class, 'show'])->name('users.show');
+    Route::patch('/users/{user}/status', [UserController::class, 'updateApplicationStatus'])->name('users.update-status');
     
-    <p class="lead mb-4">
-        Thank you for completing your registration and submitting your payment evidence.
-    </p>
+    // Payment Management
+    Route::post('/users/{user}/approve-payment', [UserController::class, 'approvePayment'])->name('users.approve-payment');
+    Route::post('/users/{user}/reject-payment', [UserController::class, 'rejectPayment'])->name('users.reject-payment');
+    
+    // SMS Management
+    Route::post('/users/{user}/sms', [UserController::class, 'sendSms'])->name('users.send-sms');
+    Route::post('/users/bulk-sms', [UserController::class, 'bulkSms'])->name('users.bulk-sms');
+    
+    // Data Import
+    Route::get('/import', [DataImportController::class, 'index'])->name('import.index');
+    Route::post('/import/upload', [DataImportController::class, 'upload'])->name('import.upload');
+});
 
-    <div class="alert alert-info">
-        <h6><i class="fas fa-info-circle me-2"></i>What's Next?</h6>
-        <ul class="mb-0 ps-3">
-            <li><strong>Payment Verification:</strong> Your payment evidence will be verified within 24 hours</li>
-            <li><strong>Application Review:</strong> After payment verification, your application will be reviewed by our team</li>
-            <li>You will receive an email notification about your application status</li>
-            <li>If accepted, you will receive instructions for accessing your training program</li>
-            <li>Please keep your contact information updated</li>
-        </ul>
-    </div>
+// Student Routes
+Route::prefix('student')->name('student.')->group(function () {
+    Route::get('/register', [RegistrationController::class, 'index'])->name('register');
+    Route::post('/verify-phone', [RegistrationController::class, 'verifyPhone'])->name('verify-phone');
+    
+    Route::get('/profile', [RegistrationController::class, 'showProfile'])->name('profile');
+    Route::post('/profile', [RegistrationController::class, 'updateProfile'])->name('profile.update');
+    
+    Route::get('/payment', [RegistrationController::class, 'showPayment'])->name('payment');
+    Route::post('/payment', [RegistrationController::class, 'processPayment'])->name('payment.process');
+    
+    Route::get('/status', [RegistrationController::class, 'status'])->name('status');
+});
 
-    <div class="alert alert-warning">
-        <h6><i class="fas fa-clock me-2"></i>Processing Timeline</h6>
-        <p class="mb-0">
-            <strong>Payment Verification:</strong> Within 24 hours<br>
-            <strong>Final Review:</strong> 2-3 business days after payment confirmation<br>
-            <strong>Results Notification:</strong> Via email and SMS
-        </p>
-    </div>
+// Payment webhook (can be kept for future integrations or removed)
+Route::post('/payment/webhook', [PaymentController::class, 'webhook'])->name('payment.webhook');
 
-    <div class="card mt-4">
-        <div class="card-body">
-            <h6>Need Help?</h6>
-            <p class="mb-0">If you have any questions or concerns, please contact info@academicfunding.org</p>
-        </div>
-    </div>
-</div>
-@endsection
-
+// Redirect root to student registration
+Route::get('/', function () {
+    return redirect()->route('student.register');
+});
 
