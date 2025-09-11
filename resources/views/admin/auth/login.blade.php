@@ -1,13 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
+<head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <title>Admin Login - Academic Funding Gateway</title>
     <meta content="width=device-width, initial-scale=1.0, shrink-to-fit=no" name="viewport" />
     <meta name="csrf-token" content="{{ csrf_token() }}">
     
-    <!-- Fonts and icons -->
     <script src="{{asset('assets/js/plugin/webfont/webfont.min.js')}}"></script>
     <script>
       WebFont.load({
@@ -27,19 +26,26 @@
       });
     </script>
 
-    <!-- CSS Files -->
     <link rel="stylesheet" href="{{ asset('assets/css/bootstrap.min.css')}}" />
     <link rel="stylesheet" href="{{ asset('assets/css/plugins.min.css')}}" />
     <link rel="stylesheet" href="{{ asset('assets/css/kaiadmin.min.css')}}" />
     
     <style>
+        :root {
+            --color-light-background: #f9f7f0;
+            --color-primary: #18b7be;
+            --color-secondary: #178ca4;
+            --color-dark: #072a40;
+        }
+
         body {
-            background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
+            background-color: var(--color-light-background);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             font-family: 'Public Sans', sans-serif;
+            color: var(--color-dark);
         }
         
         .login-container {
@@ -57,13 +63,8 @@
             margin-bottom: 2rem;
         }
         
-        .logo-section img {
-            height: 60px;
-            margin-bottom: 1rem;
-        }
-        
         .logo-section h3 {
-            color: #4e73df;
+            color: var(--color-primary);
             font-weight: 600;
             margin-bottom: 0.5rem;
         }
@@ -86,12 +87,12 @@
         }
         
         .form-control:focus {
-            border-color: #4e73df;
-            box-shadow: 0 0 0 0.2rem rgba(78, 115, 223, 0.25);
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 0.2rem rgba(24, 183, 190, 0.25);
         }
         
         .btn-login {
-            background: #4e73df;
+            background: var(--color-primary);
             border: none;
             border-radius: 8px;
             padding: 0.75rem;
@@ -103,14 +104,14 @@
         }
         
         .btn-login:hover {
-            background: #2e59d9;
+            background: var(--color-secondary);
             transform: translateY(-1px);
-            box-shadow: 0 4px 8px rgba(78, 115, 223, 0.3);
+            box-shadow: 0 4px 8px rgba(23, 140, 164, 0.3);
         }
         
         .form-check-input:checked {
-            background-color: #4e73df;
-            border-color: #4e73df;
+            background-color: var(--color-primary);
+            border-color: var(--color-primary);
         }
         
         .alert {
@@ -125,7 +126,7 @@
         }
         
         .back-link a {
-            color: #4e73df;
+            color: var(--color-secondary);
             text-decoration: none;
             font-weight: 500;
             font-size: 0.9rem;
@@ -133,13 +134,14 @@
         
         .back-link a:hover {
             text-decoration: underline;
-            color: #2e59d9;
+            color: var(--color-primary);
         }
         
         .input-group-text {
             background: white;
             border-radius: 8px 0 0 8px;
             border-right: none;
+            color: var(--color-secondary);
         }
         
         .input-group .form-control {
@@ -157,8 +159,9 @@
 </head>
 <body>
     <div class="login-container">
-        <div class="logo-section">            
-            <p>Academic Funding Gateway Administration</p>
+        <div class="logo-section">
+            <h3 class="fw-bold">Academic Funding Gateway</h3>
+            <p>Admin Portal</p>
         </div>
 
         @if(session('success'))
@@ -192,7 +195,7 @@
                 <label for="email" class="form-label">Email Address</label>
                 <div class="input-group">
                     <span class="input-group-text">
-                        <i class="fas fa-envelope text-primary"></i>
+                        <i class="fas fa-envelope"></i>
                     </span>
                     <input 
                         type="email" 
@@ -215,7 +218,7 @@
                 <label for="password" class="form-label">Password</label>
                 <div class="input-group">
                     <span class="input-group-text">
-                        <i class="fas fa-lock text-primary"></i>
+                        <i class="fas fa-lock"></i>
                     </span>
                     <input 
                         type="password" 
@@ -226,20 +229,15 @@
                         required
                         autocomplete="current-password"
                     >
+                    <span class="input-group-text toggle-password" style="cursor: pointer;" title="Show password">
+                        <i class="fas fa-eye"></i>
+                    </span>
                 </div>
                 @error('password')
                     <div class="invalid-feedback d-block">{{ $message }}</div>
                 @enderror
             </div>
 
-            <!-- <div class="form-group">
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" name="remember" id="remember" {{ old('remember') ? 'checked' : '' }}>
-                    <label class="form-check-label" for="remember">
-                        Remember me
-                    </label>
-                </div>
-            </div> -->
 
             <button type="submit" class="btn btn-login">
                 <i class="fas fa-sign-in-alt me-2"></i>Login to Admin Panel
@@ -247,17 +245,16 @@
         </form>
 
         <div class="back-link">
-            <a href="{{ route('student.register') }}">
-                <i class="fas fa-arrow-left me-1"></i>Back to Student Portal
+            <a href="{{ route('landing') }}">
+                <i class="fas fa-arrow-left me-1"></i>Back to Main Site
             </a>
         </div>
         
         <div class="login-footer">
-            &copy; 2024 Academic Funding Gateway Network
+            &copy; {{ date('Y') }} Academic Funding Gateway
         </div>
     </div>
 
-    <!-- Core JS Files -->
     <script src="{{asset('assets/js/core/jquery-3.7.1.min.js')}}"></script>
     <script src="{{asset('assets/js/core/popper.min.js')}}"></script>
     <script src="{{asset('assets/js/core/bootstrap.min.js')}}"></script>
@@ -276,24 +273,16 @@
         
         // Toggle password visibility
         document.addEventListener('DOMContentLoaded', function() {
-            const togglePassword = document.createElement('span');
-            togglePassword.innerHTML = '<i class="fas fa-eye"></i>';
-            togglePassword.className = 'input-group-text toggle-password';
-            togglePassword.style.cursor = 'pointer';
-            togglePassword.title = 'Show password';
-            
+            const togglePassword = document.querySelector('.toggle-password');
             const passwordInput = document.getElementById('password');
-            const inputGroup = passwordInput.closest('.input-group');
             
             togglePassword.addEventListener('click', function() {
                 const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
                 passwordInput.setAttribute('type', type);
                 
-                this.innerHTML = type === 'password' ? '<i class="fas fa-eye"></i>' : '<i class="fas fa-eye-slash"></i>';
+                this.querySelector('i').className = type === 'password' ? 'fas fa-eye' : 'fas fa-eye-slash';
                 this.title = type === 'password' ? 'Show password' : 'Hide password';
             });
-            
-            inputGroup.appendChild(togglePassword);
         });
     </script>
 </body>
