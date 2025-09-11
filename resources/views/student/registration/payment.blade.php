@@ -95,7 +95,7 @@
 
     <div class="d-grid">
         <button type="submit" class="btn btn-success btn-lg">
-            <i class="bi bi-check-circle me-2"></i>Submit Payment Evidence & Complete Registration
+            <i class="bi bi-check-circle me-2"></i>Submit Registration
         </button>
     </div>
 </form>
