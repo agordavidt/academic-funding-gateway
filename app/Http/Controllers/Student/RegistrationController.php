@@ -63,8 +63,7 @@ class RegistrationController extends Controller
         $user = User::findOrFail($userId);
 
         $request->validate([
-            'email' => 'required|email|unique:users,email,' . $user->id,
-            'address' => 'required|string|max:500',
+            'email' => 'required|email|unique:users,email,' . $user->id,           
             'school' => 'required|string|max:255',
             'matriculation_number' => 'nullable|string|max:50',
             'need_assessment_text' => 'required|string|max:1000',
@@ -72,8 +71,7 @@ class RegistrationController extends Controller
 
         // Update user information
         $user->update([
-            'email' => $request->email,
-            'address' => $request->address,
+            'email' => $request->email,           
             'school' => $request->school,
             'matriculation_number' => $request->matriculation_number,
             'registration_stage' => 'payment',

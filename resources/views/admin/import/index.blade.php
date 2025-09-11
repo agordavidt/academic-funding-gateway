@@ -79,11 +79,7 @@
                     <li class="list-group-item d-flex justify-content-between align-items-center">
                         <span><strong>matriculation_number</strong></span>
                         <span class="badge badge-secondary badge-pill">Optional</span>
-                    </li>
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <span><strong>address</strong></span>
-                        <span class="badge badge-secondary badge-pill">Optional</span>
-                    </li>
+                    </li>                    
                 </ul>
                 <div class="alert alert-info mt-3">
                     <i class="fas fa-info-circle me-2"></i>
@@ -98,7 +94,7 @@
             </div>
         </div>
 
-        <div class="card mt-3">
+        <!-- <div class="card mt-3">
             <div class="card-header">
                 <div class="card-head-row">
                     <div class="card-title">Sample Format</div>
@@ -127,7 +123,7 @@
                     </table>
                 </div>
             </div>
-        </div>
+        </div> -->
     </div>
 </div>
 @endsection

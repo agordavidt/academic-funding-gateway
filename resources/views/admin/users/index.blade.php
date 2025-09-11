@@ -85,9 +85,9 @@
                         <th>Phone</th>
                         <th>Email</th>
                         <th>School</th>
-                        <th>Payment Status</th>
-                        <th>Application Status</th>
-                        <th>Registration Stage</th>
+                        <th>Payment</th>
+                        <th>Application</th>
+                        <th>Registration</th>
                         <th>Actions</th>
                     </tr>
                 </thead>

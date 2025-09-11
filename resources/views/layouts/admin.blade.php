@@ -1,14 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <title>@yield('title', 'Admin Dashboard') - Academic Funding Gateway</title>
     <meta content="width=device-width, initial-scale=1.0, shrink-to-fit=no" name="viewport" />
     <link rel="icon" href="{{ asset('favicon.ico') }}" type="image/x-icon" />
-    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="csrf-token" content="{{ csrf_token() }}" />
     
-    <!-- Fonts and icons -->
     <script src="{{asset('assets/js/plugin/webfont/webfont.min.js')}}"></script>
     <script>
       WebFont.load({
@@ -28,15 +27,13 @@
       });
     </script>
 
-    <!-- CSS Files -->
     <link rel="stylesheet" href="{{ asset('assets/css/bootstrap.min.css')}}" />
     <link rel="stylesheet" href="{{ asset('assets/css/plugins.min.css')}}" />
     <link rel="stylesheet" href="{{ asset('assets/css/kaiadmin.min.css')}}" />
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
 
-    <!-- CSS Just for demo purpose, don't include it in your project -->
     <link rel="stylesheet" href="{{ asset('assets/css/demo.css')}}" />
-   
+    
     <style>
       .app-name {
         font-weight: 600;
@@ -60,23 +57,22 @@
         transform: translateY(-5px);
         box-shadow: 0 5px 15px rgba(0,0,0,0.1);
       }
+      .sidebar-logout {
+        margin-top: auto; /* Pushes the item to the bottom */
+        padding-top: 20px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .sidebar-logout a {
+        color: #dc3545 !important; /* Conventional logout color (red) */
+      }
     </style>
   </head>
   <body>
     <div class="wrapper">
-      <!-- Sidebar -->
       <div class="sidebar" data-background-color="dark">
         <div class="sidebar-logo">
-          <!-- Logo Header -->
           <div class="logo-header" data-background-color="dark">
             <a href="{{ route('admin.dashboard') }}" class="logo d-flex align-items-center">
-              <!-- <img
-                src="{{ asset('assets/img/logo.png') }}"
-                alt="AFG Logo"
-                class="navbar-brand"
-                height="40"
-                width="40"
-              /> -->
               <span class="app-name ms-2">AFG Admin</span>
             </a>
             <div class="nav-toggle">
@@ -91,8 +87,7 @@
               <i class="gg-more-vertical-alt"></i>
             </button>
           </div>
-          <!-- End Logo Header -->
-        </div>
+          </div>
         <div class="sidebar-wrapper scrollbar scrollbar-inner">
           <div class="sidebar-content">
             <ul class="nav nav-secondary">
@@ -114,16 +109,22 @@
                   <p>Import Data</p>
                 </a>
               </li>
+              <li class="nav-item sidebar-logout">
+                <form action="{{ route('admin.logout') }}" method="POST">
+                  @csrf
+                  <a href="#" onclick="event.preventDefault(); this.closest('form').submit();">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <p>Logout</p>
+                  </a>
+                </form>
+              </li>
             </ul>
           </div>
         </div>
       </div>
-      <!-- End Sidebar -->
-
       <div class="main-panel">
         <div class="main-header">
           <div class="main-header-logo">
-            <!-- Logo Header -->
             <div class="logo-header" data-background-color="dark">
               <a href="{{ route('admin.dashboard') }}" class="logo">
                 <img
@@ -146,9 +147,7 @@
                 <i class="gg-more-vertical-alt"></i>
               </button>
             </div>
-            <!-- End Logo Header -->
-          </div>
-          <!-- Navbar Header -->
+            </div>
           <nav class="navbar navbar-header navbar-header-transparent navbar-expand-lg border-bottom">
             <div class="container-fluid">
               <nav class="navbar navbar-header-left navbar-expand-lg navbar-form nav-search p-0 d-none d-lg-flex">
@@ -173,8 +172,8 @@
                     data-bs-toggle="dropdown"
                     href="#"
                     aria-expanded="false"
-                  >                   
-                    <span class="profile-username">                      
+                  >
+                    <span class="profile-username">
                       <span class="fw-bold">{{ Auth::guard('admin')->user()->name ?? 'Admin' }}</span>
                     </span>
                   </a>
@@ -182,39 +181,23 @@
                     <div class="dropdown-user-scroll scrollbar-outer">
                       <li>
                         <div class="user-box">
-                          <div class="avatar-lg">                            
+                          <div class="avatar-lg">
                           </div>
                           <div class="u-text">
                             <h4>{{ Auth::guard('admin')->user()->name ?? 'Admin User' }}</h4>
                             <p class="text-muted">{{ Auth::guard('admin')->user()->email ?? 'admin@afg.com' }}</p>
-                            <!-- <a
-                              href="#"
-                              class="btn btn-xs btn-secondary btn-sm"
-                              >View Profile</a
-                            > -->
                           </div>
                         </div>
                       </li>
                       <li>
-                        <!-- <div class="dropdown-divider"></div>
-                        <a class="dropdown-item" href="#"><i class="fas fa-user me-2"></i>My Profile</a>
-                        <a class="dropdown-item" href="#"><i class="fas fa-cog me-2"></i>Account Settings</a>
-                        <div class="dropdown-divider"></div> -->
-                        <form action="{{ route('admin.logout') }}" method="POST" id="logout-form">
-                            @csrf
-                            <a class="dropdown-item" href="#"
-                            onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
-                            <i class="fas fa-sign-out-alt me-2"></i>Logout</a>
-                        </form>
-                      </li>
+                        </li>
                     </div>
                   </ul>
                 </li>
               </ul>
             </div>
           </nav>
-          <!-- End Navbar -->
-        </div>
+          </div>
 
         <div class="container">
           <div class="page-inner">
@@ -237,7 +220,6 @@
             </div>
             
             <div class="page-category">
-              <!-- Display alerts from session -->
               @if(session('success'))
                 <div class="alert alert-success alert-dismissible fade show" role="alert">
                   <i class="fas fa-check-circle me-2"></i>{{ session('success') }}
@@ -285,7 +267,6 @@
                 </div>
               @endif
               
-              <!-- Main content -->
               @yield('content')
             </div>
           </div>
@@ -297,52 +278,43 @@
               <ul class="nav">
                 <li class="nav-item">
                   <a class="nav-link" href="{{ route('admin.dashboard') }}">
-                    Academic Funding Gateway
+                   
                   </a>
                 </li>
                 <li class="nav-item">
-                  <a class="nav-link" href="#"> Help </a>
+                 
                 </li>
                 <li class="nav-item">
-                  <a class="nav-link" href="#"> Privacy Policy </a>
+                
                 </li>
               </ul>
             </nav>
             <div class="copyright">
-              {{ date('Y') }}, made with <i class="fa fa-heart heart text-danger"></i> for
-              <a href="#">Academic Funding Gateway</a>
+              {{ date('Y') }} @
+              <a href="www.academicfunding.org">Academic Funding Gateway</a>
             </div>
           </div>
         </footer>
       </div>
     </div>
-    <!--   Core JS Files   -->
     <script src="{{asset('assets/js/core/jquery-3.7.1.min.js')}}"></script>
     <script src="{{asset('assets/js/core/popper.min.js')}}"></script>
     <script src="{{asset('assets/js/core/bootstrap.min.js')}}"></script>
 
-    <!-- jQuery Scrollbar -->
     <script src="{{asset('assets/js/plugin/jquery-scrollbar/jquery.scrollbar.min.js')}}"></script>
 
-    <!-- Chart JS -->
     <script src="{{asset('assets/js/plugin/chart.js/chart.min.js')}}"></script>
 
-    <!-- jQuery Sparkline -->
     <script src="{{asset('assets/js/plugin/jquery.sparkline/jquery.sparkline.min.js')}}"></script>
 
-    <!-- Chart Circle -->
     <script src="{{asset('assets/js/plugin/chart-circle/circles.min.js')}}"></script>
 
-    <!-- Datatables -->
     <script src="{{asset('assets/js/plugin/datatables/datatables.min.js')}}"></script>
 
-    <!-- Bootstrap Notify -->
     <script src="{{asset('assets/js/plugin/bootstrap-notify/bootstrap-notify.min.js')}}"></script>
 
-    <!-- Sweet Alert -->
     <script src="{{asset('assets/js/plugin/sweetalert/sweetalert.min.js')}}"></script>
 
-    <!-- Kaiadmin JS -->
     <script src="{{asset('assets/js/kaiadmin.min.js')}}"></script>
     
     <script>

@@ -52,11 +52,7 @@
                         <div class="form-group">
                             <label class="form-label"><strong>Matriculation Number</strong></label>
                             <p>{{ $user->matriculation_number ?: 'N/A' }}</p>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label"><strong>Address</strong></label>
-                            <p>{{ $user->address ?: 'N/A' }}</p>
-                        </div>
+                        </div>                        
                         <div class="form-group">
                             <label class="form-label"><strong>Registration Stage</strong></label>
                             <p>

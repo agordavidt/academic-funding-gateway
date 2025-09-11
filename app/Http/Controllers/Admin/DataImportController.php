@@ -82,8 +82,7 @@ class DataImportController extends Controller
                         'last_name' => trim($studentData['last_name']),
                         'email' => !empty($studentData['email']) ? trim($studentData['email']) : null,
                         'school' => !empty($studentData['school']) ? trim($studentData['school']) : null,
-                        'matriculation_number' => !empty($studentData['matriculation_number']) ? trim($studentData['matriculation_number']) : null,
-                        'address' => !empty($studentData['address']) ? trim($studentData['address']) : null,
+                        'matriculation_number' => !empty($studentData['matriculation_number']) ? trim($studentData['matriculation_number']) : null,                       
                         'password' => Hash::make('password123'), // Default password
                     ]);
                     $imported++;

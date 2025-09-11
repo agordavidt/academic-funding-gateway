@@ -14,8 +14,7 @@ return new class extends Migration
             $table->string('phone_number')->unique();
             $table->string('email')->unique()->nullable();
             $table->string('first_name');
-            $table->string('last_name');
-            $table->text('address')->nullable();
+            $table->string('last_name');           
             $table->string('school')->nullable();
             $table->string('matriculation_number')->nullable();
             $table->enum('registration_stage', ['imported', 'profile_completion', 'payment', 'completed'])->default('imported');

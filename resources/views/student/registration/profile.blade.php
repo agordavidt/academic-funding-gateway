@@ -52,7 +52,7 @@
     </div>
 
     <div class="form-group">
-        <label for="email" class="form-label">Email Address *</label>
+        <label for="email" class="form-label">Email  *</label>
         <div class="input-group">
             <span class="input-group-text">
                 <i class="fas fa-envelope text-primary"></i>
@@ -95,20 +95,7 @@
             <div class="invalid-feedback d-block">{{ $message }}</div>
         @enderror
     </div>
-
-    <div class="form-group">
-        <label for="address" class="form-label">Address *</label>
-        <div class="input-group">
-            <span class="input-group-text">
-                <i class="fas fa-map-marker-alt text-primary"></i>
-            </span>
-            <textarea class="form-control @error('address') is-invalid @enderror" 
-                      id="address" name="address" rows="3" required>{{ old('address', $user->address) }}</textarea>
-        </div>
-        @error('address')
-            <div class="invalid-feedback d-block">{{ $message }}</div>
-        @enderror
-    </div>
+   
 
     <div class="form-group">
         <label for="need_assessment_text" class="form-label">Need Assessment *</label>

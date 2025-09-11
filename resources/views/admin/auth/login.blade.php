@@ -232,14 +232,14 @@
                 @enderror
             </div>
 
-            <div class="form-group">
+            <!-- <div class="form-group">
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox" name="remember" id="remember" {{ old('remember') ? 'checked' : '' }}>
                     <label class="form-check-label" for="remember">
                         Remember me
                     </label>
                 </div>
-            </div>
+            </div> -->
 
             <button type="submit" class="btn btn-login">
                 <i class="fas fa-sign-in-alt me-2"></i>Login to Admin Panel
