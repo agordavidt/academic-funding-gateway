@@ -8,6 +8,11 @@ use App\Http\Controllers\Admin\DataImportController;
 use App\Http\Controllers\Student\RegistrationController;
 use App\Http\Controllers\Student\PaymentController;
 
+// New Landing Page Route
+Route::get('/', function () {
+    return view('landing');
+})->name('landing');
+
 // Admin Authentication Routes (No middleware protection)
 Route::prefix('admin')->name('admin.')->group(function () {
     Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
@@ -52,9 +57,5 @@ Route::prefix('student')->name('student.')->group(function () {
     Route::get('/status', [RegistrationController::class, 'status'])->name('status');
 });
 
-
-
-// Redirect root to student registration
-Route::get('/', function () {
-    return redirect()->route('student.register');
-});
+// Payment webhook
+Route::post('/payment/webhook', [PaymentController::class, 'webhook'])->name('payment.webhook');
