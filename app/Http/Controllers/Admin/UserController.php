@@ -10,6 +10,8 @@ use App\Services\SmsService;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 
 class UserController extends Controller
 {
@@ -24,7 +26,7 @@ class UserController extends Controller
 
     public function index(Request $request)
     {
-        $query = User::with(['application', 'payments']);
+        $query = User::with(['payments']);
 
         // Search functionality
         if ($request->filled('search')) {
@@ -47,7 +49,7 @@ class UserController extends Controller
             $query->where('application_status', $request->application_status);
         }
 
-        // School/University filter
+        // School filter
         if ($request->filled('school')) {
             $query->where('school', 'like', "%{$request->school}%");
         }
@@ -57,10 +59,11 @@ class UserController extends Controller
             $query->where('registration_stage', $request->registration_stage);
         }
 
-        $users = $query->paginate(15);
+        $users = $query->orderBy('created_at', 'desc')->paginate(15);
 
         // Get unique schools for filter dropdown
         $schools = User::whereNotNull('school')
+                        ->where('school', '!=', '')
                         ->distinct()
                         ->pluck('school')
                         ->sort()
@@ -71,12 +74,67 @@ class UserController extends Controller
 
     public function show(User $user)
     {
-        $user->load(['application', 'payments', 'notifications', 'trainingInstitution']);
+        $user->load(['payments', 'notifications']);
         
-        // Get SMS balance for display
-        $smsBalance = $this->smsService->getBalance();
+        $smsBalance = ['balance' => 'N/A', 'currency' => 'Credits']; // Placeholder
         
         return view('admin.users.show', compact('user', 'smsBalance'));
+    }
+
+    public function edit(User $user)
+    {
+        return view('admin.users.edit', compact('user'));
+    }
+
+    public function update(Request $request, User $user)
+    {
+        $request->validate([
+            'first_name' => 'required|string|max:255',
+            'last_name' => 'required|string|max:255',
+            'email' => ['nullable', 'email', Rule::unique('users')->ignore($user->id)],
+            'phone_number' => ['required', 'string', Rule::unique('users')->ignore($user->id)],
+            'school' => 'nullable|string|max:255',
+            'registration_stage' => 'required|in:imported,profile_completion,payment,completed',
+            'payment_status' => 'required|in:pending,paid',
+            'application_status' => 'required|in:pending,reviewing,accepted,rejected',
+        ]);
+
+        try {
+            $user->update([
+                'first_name' => $request->first_name,
+                'last_name' => $request->last_name,
+                'email' => $request->email,
+                'phone_number' => $request->phone_number, // Will be cleaned by mutator
+                'school' => $request->school,
+                'registration_stage' => $request->registration_stage,
+                'payment_status' => $request->payment_status,
+                'application_status' => $request->application_status,
+            ]);
+
+            return redirect()->route('admin.users.show', $user)
+                           ->with('success', 'User updated successfully.');
+        } catch (\Exception $e) {
+            Log::error('Failed to update user: ' . $e->getMessage(), ['user_id' => $user->id]);
+            return back()->with('error', 'Failed to update user: ' . $e->getMessage())
+                        ->withInput();
+        }
+    }
+
+    public function destroy(User $user)
+    {
+        try {
+            // Delete related payments first
+            $user->payments()->delete();
+            
+            // Delete the user
+            $user->delete();
+
+            return redirect()->route('admin.users.index')
+                           ->with('success', 'User and related records deleted successfully.');
+        } catch (\Exception $e) {
+            Log::error('Failed to delete user: ' . $e->getMessage(), ['user_id' => $user->id]);
+            return back()->with('error', 'Failed to delete user: ' . $e->getMessage());
+        }
     }
 
     public function updateApplicationStatus(Request $request, User $user)
@@ -88,7 +146,6 @@ class UserController extends Controller
         $oldStatus = $user->application_status;
         $user->update(['application_status' => $request->application_status]);
 
-        // Send notification if status changed
         if ($oldStatus !== $request->application_status) {
             try {
                 $this->notificationService->sendApplicationStatusUpdate($user, $request->application_status);
@@ -101,8 +158,8 @@ class UserController extends Controller
                 return back()->with('warning', 'Application status updated, but notification failed. Error: ' . $e->getMessage());
             }
         }
-    
-        return back()->with('success', 'Application status updated successfully. No notification sent as status did not change.');
+        
+        return back()->with('success', 'Application status updated successfully.');
     }
 
     public function approvePayment(Request $request, User $user)
@@ -115,22 +172,23 @@ class UserController extends Controller
 
         $payment->update([
             'status' => 'success',
-            'paid_at' => now(),
-            'gateway_response' => array_merge($payment->gateway_response ?? [], [
-                'approved_by' => auth('admin')->user()->name ?? 'Admin',
-                'approved_at' => now(),
-                'approval_note' => $request->approval_note
-            ])
+            'gateway_response' => json_encode(array_merge(
+                json_decode($payment->gateway_response ?? '{}', true), 
+                [
+                    'approved_by' => auth('admin')->user()->name ?? 'Admin',
+                    'approved_at' => now()->toISOString(),
+                    'approval_note' => $request->approval_note
+                ]
+            ))
         ]);
 
         $user->update([
             'payment_status' => 'paid'
         ]);
 
-        // Send payment approval notification (email + SMS)
         try {
             $this->notificationService->sendPaymentApproved($user, $payment);
-            return back()->with('success', 'Payment approved successfully. User has been notified via email and SMS.');
+            return back()->with('success', 'Payment approved successfully. User has been notified.');
         } catch (Exception $e) {
             Log::error('Failed to send payment approval notification: ' . $e->getMessage(), [
                 'user_id' => $user->id,
@@ -154,49 +212,25 @@ class UserController extends Controller
 
         $payment->update([
             'status' => 'rejected',
-            'gateway_response' => array_merge($payment->gateway_response ?? [], [
-                'rejected_by' => auth('admin')->user()->name ?? 'Admin',
-                'rejected_at' => now(),
-                'rejection_reason' => $request->rejection_reason
-            ])
+            'gateway_response' => json_encode(array_merge(
+                json_decode($payment->gateway_response ?? '{}', true), 
+                [
+                    'rejected_by' => auth('admin')->user()->name ?? 'Admin',
+                    'rejected_at' => now()->toISOString(),
+                    'rejection_reason' => $request->rejection_reason
+                ]
+            ))
         ]);
 
-        // Send payment rejection notification (email + SMS)
         try {
             $this->notificationService->sendPaymentRejected($user, $payment, $request->rejection_reason);
-            return back()->with('success', 'Payment rejected. User has been notified via email and SMS.');
+            return back()->with('success', 'Payment rejected. User has been notified.');
         } catch (Exception $e) {
             Log::error('Failed to send payment rejection notification: ' . $e->getMessage(), [
                 'user_id' => $user->id,
                 'payment_id' => $payment->id
             ]);
             return back()->with('warning', 'Payment rejected, but notification failed. Error: ' . $e->getMessage());
-        }
-    }
-
-    public function assignTrainingInstitution(Request $request, User $user)
-    {
-        $request->validate([
-            'training_institution_id' => 'required|exists:training_institutions,id'
-        ]);
-
-        $trainingInstitution = \App\Models\TrainingInstitution::findOrFail($request->training_institution_id);
-        
-        $user->update([
-            'training_institution_id' => $trainingInstitution->id,
-            'training_assigned_at' => now()
-        ]);
-
-        // Send training assignment notification
-        try {
-            $this->notificationService->sendTrainingAssignment($user, $trainingInstitution);
-            return back()->with('success', 'Training institution assigned successfully. User has been notified.');
-        } catch (Exception $e) {
-            Log::error('Failed to send training assignment notification: ' . $e->getMessage(), [
-                'user_id' => $user->id,
-                'institution_id' => $trainingInstitution->id
-            ]);
-            return back()->with('warning', 'Training institution assigned, but notification failed. Error: ' . $e->getMessage());
         }
     }
 
@@ -216,16 +250,14 @@ class UserController extends Controller
             if ($result['success']) {
                 return back()->with('success', 'SMS sent successfully to ' . $user->phone_number);
             } else {
-                // The service itself returned a failure, which is a handled error
                 return back()->with('error', 'Failed to send SMS: ' . $result['message']);
             }
         } catch (Exception $e) {
-            // A genuine unhandled exception occurred, like a network error
-            Log::error('An exception occurred while trying to send custom SMS: ' . $e->getMessage(), [
+            Log::error('Failed to send custom SMS: ' . $e->getMessage(), [
                 'user_id' => $user->id,
                 'phone' => $user->phone_number
             ]);
-            return back()->with('error', 'An unexpected error occurred while sending SMS. Please check the logs.');
+            return back()->with('error', 'Failed to send SMS. Please check the logs.');
         }
     }
 
@@ -239,77 +271,69 @@ class UserController extends Controller
 
         $query = User::query();
 
-        // Apply recipient filters
         switch ($request->recipients) {
             case 'paid':
-                $query->withPaymentStatus('paid');
+                $query->where('payment_status', 'paid');
                 break;
             case 'pending':
-                $query->withPaymentStatus('pending');
+                $query->where('payment_status', 'pending');
                 break;
             case 'accepted':
-                $query->withApplicationStatus('accepted');
+                $query->where('application_status', 'accepted');
                 break;
             case 'rejected':
-                $query->withApplicationStatus('rejected');
+                $query->where('application_status', 'rejected');
                 break;
             case 'with_phone':
-                $query->withValidPhone();
+                $query->whereNotNull('phone_number')->where('phone_number', '!=', '');
                 break;
             case 'all':
-                // No additional filter
                 break;
         }
 
-        // Apply school filter if specified
         if ($request->filled('school_filter')) {
-            $query->fromSchool($request->school_filter);
+            $query->where('school', 'like', "%{$request->school_filter}%");
         }
 
-        // Always filter to users with valid phone numbers for SMS
-        if ($request->recipients !== 'with_phone') {
-            $query->withValidPhone();
-        }
-
-        $users = $query->get();
+        // Filter to users with valid phone numbers for SMS
+        $users = $query->get()->filter(function ($user) {
+            return $user->hasValidPhoneNumber();
+        });
 
         if ($users->count() === 0) {
             return back()->with('error', 'No users match the selected criteria or have valid phone numbers.');
         }
 
-        // Send bulk SMS
         try {
             $result = $this->notificationService->sendBulkSms($users->toArray(), $request->message);
 
             if ($result['success']) {
-                $message = "Bulk SMS sent successfully to {$result['total']} users.";
+                $message = "Bulk SMS sent successfully to {$users->count()} users.";
             } else {
                 $message = "Bulk SMS failed: {$result['message']}";
             }
 
             return back()->with($result['success'] ? 'success' : 'error', $message);
         } catch (Exception $e) {
-            Log::error('An exception occurred while trying to send bulk SMS: ' . $e->getMessage(), [
+            Log::error('Failed to send bulk SMS: ' . $e->getMessage(), [
                 'recipients' => $request->recipients,
                 'school_filter' => $request->school_filter
             ]);
-            return back()->with('error', 'An unexpected error occurred while sending bulk SMS. Please check the logs.');
+            return back()->with('error', 'Failed to send bulk SMS. Please check the logs.');
         }
     }
 
     public function getSmsBalance()
     {
-        $balance = $this->smsService->getBalance();
-        
         return response()->json([
-            'balance' => $balance['balance'],
-            'currency' => $balance['currency'] ?? 'Credits'
+            'balance' => 'N/A',
+            'currency' => 'Credits'
         ]);
     }
 
     public function smsSettings()
     {
-        $balance = $this->smsService->getBalance();
+        $balance = ['balance' => 'N/A', 'currency' => 'Credits'];
         $recentSms = \App\Models\Notification::where('type', 'LIKE', '%sms%')
                                             ->with('user')
                                             ->latest()
@@ -334,12 +358,12 @@ class UserController extends Controller
                 'message' => $result['message']
             ]);
         } catch (Exception $e) {
-            Log::error('An exception occurred while trying to send test SMS: ' . $e->getMessage(), [
+            Log::error('Failed to send test SMS: ' . $e->getMessage(), [
                 'phone' => $request->phone_number
             ]);
             return response()->json([
                 'success' => false,
-                'message' => 'An unexpected error occurred while sending the test SMS.'
+                'message' => 'Failed to send test SMS.'
             ], 500);
         }
     }

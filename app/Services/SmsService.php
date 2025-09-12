@@ -5,275 +5,105 @@ namespace App\Services;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
-use App\Notifications\SmsNotification;
 
 class SmsService
 {
     protected $username;
     protected $apiKey;
-    protected $from;
     protected $baseUrl;
+    protected $sender;
 
     public function __construct()
     {
-        $this->username = config('services.africastalking.username');
-        $this->apiKey = config('services.africastalking.key');
-        $this->from = config('services.africastalking.from', '');
-        $this->baseUrl = 'https://api.africastalking.com/version1/messaging';
+        // Change config to EbulkSMS credentials
+        $this->username = config('services.ebulksms.username');
+        $this->apiKey = config('services.ebulksms.apikey');
+        $this->sender = config('services.ebulksms.sender', 'YourSenderID');
+        $this->baseUrl = 'https://api.ebulksms.com/sendsms';
     }
 
     /**
-     * Send SMS using Africa's Talking API
+     * Send SMS using EbulkSMS HTTP GET API
+     * @param string $phoneNumber Can be a single number or a comma-separated string for bulk
+     * @param string $message The SMS message content
+     * @param string|null $sender The sender ID to use (optional)
+     * @return array
      */
-    public function sendSms($phoneNumber, $message, $from = null)
+    public function sendSms($phoneNumber, $message, $sender = null)
     {
         try {
-            $phoneNumber = $this->cleanPhoneNumber($phoneNumber);
+            // Remove any non-numeric characters from the phone number(s)
+            $cleanedNumbers = collect(explode(',', $phoneNumber))
+                ->map(fn ($num) => $this->cleanPhoneNumber($num))
+                ->filter()
+                ->implode(',');
 
             if (empty($this->apiKey) || empty($this->username)) {
-                Log::warning('SMS API credentials not configured');
-                return [
-                    'success' => false,
-                    'message' => 'SMS service not properly configured'
-                ];
+                Log::warning('EbulkSMS API credentials not configured');
+                return ['success' => false, 'message' => 'SMS service not properly configured'];
             }
 
             // For development/testing, log instead of sending
-            if (app()->environment('local') && !config('services.africastalking.send_in_local', false)) {
-                Log::info('SMS would be sent in production', [
-                    'phone' => $phoneNumber,
+            if (app()->environment('local') && !config('services.ebulksms.send_in_local', false)) {
+                Log::info('EbulkSMS would be sent in production', [
+                    'phone' => $cleanedNumbers,
                     'message' => $message,
-                    'from' => $from ?? $this->from
+                    'sender' => $sender ?? $this->sender
                 ]);
-                return [
-                    'success' => true,
-                    'message' => 'SMS logged (development mode)',
-                    'message_id' => 'dev_' . time()
-                ];
+                return ['success' => true, 'message' => 'SMS logged (development mode)', 'message_id' => 'dev_' . time()];
             }
 
-            $headers = [
-                'apiKey' => $this->apiKey,
-                'Content-Type' => 'application/x-www-form-urlencoded',
-                'Accept' => 'application/json'
-            ];
-
-            $data = [
+            // Make the HTTP GET request with query parameters
+            $response = Http::get($this->baseUrl, [
                 'username' => $this->username,
-                'to' => $phoneNumber,
-                'message' => $message,
-            ];
+                'apikey' => $this->apiKey,
+                'sender' => $sender ?? $this->sender,
+                'messagetext' => $message,
+                'recipients' => $cleanedNumbers,
+            ]);
 
-            // Add sender ID if provided
-            if ($from ?? $this->from) {
-                $data['from'] = $from ?? $this->from;
-            }
+            $body = $response->body();
+            Log::info('EbulkSMS API raw response', ['response' => $body]);
 
-            $response = Http::withHeaders($headers)
-                ->timeout(30)
-                ->asForm()
-                ->post($this->baseUrl, $data);
-
-            if ($response->successful()) {
-                $responseData = $response->json();
-                
-                // Africa's Talking returns SMSMessageData
-                if (isset($responseData['SMSMessageData']['Recipients'])) {
-                    $recipients = $responseData['SMSMessageData']['Recipients'];
-                    $recipient = $recipients[0] ?? null;
-                    
-                    if ($recipient && isset($recipient['statusCode']) && $recipient['statusCode'] == 101) {
-                        Log::info('SMS sent successfully via Africa\'s Talking', [
-                            'phone' => $phoneNumber,
-                            'messageId' => $recipient['messageId'] ?? null,
-                            'cost' => $recipient['cost'] ?? null
-                        ]);
-
-                        return [
-                            'success' => true,
-                            'message' => 'SMS sent successfully',
-                            'message_id' => $recipient['messageId'] ?? null,
-                            'cost' => $recipient['cost'] ?? null
-                        ];
-                    } else {
-                        $error = $recipient['status'] ?? 'Failed to send SMS';
-                        Log::error('SMS sending failed', [
-                            'phone' => $phoneNumber,
-                            'error' => $error,
-                            'status_code' => $recipient['statusCode'] ?? null
-                        ]);
-
-                        return [
-                            'success' => false,
-                            'message' => $error
-                        ];
+            // Check the response status
+            if (str_contains($body, 'SUCCESS')) {
+                // EbulkSMS returns a string like: SUCCESS|totalsent:1|cost:0.1
+                $parts = explode('|', $body);
+                $result = [];
+                foreach ($parts as $part) {
+                    if (str_contains($part, ':')) {
+                        list($key, $value) = explode(':', $part);
+                        $result[$key] = $value;
                     }
-                } else {
-                    Log::error('Unexpected Africa\'s Talking API response format', [
-                        'response' => $responseData
-                    ]);
-                    return [
-                        'success' => false,
-                        'message' => 'Unexpected API response format'
-                    ];
                 }
+                Log::info('SMS sent successfully via EbulkSMS', ['recipients' => $cleanedNumbers, 'result' => $result]);
+                return ['success' => true, 'message' => 'SMS sent successfully', 'result' => $result];
             } else {
-                $error = $response->json()['message'] ?? 'Failed to send SMS';
-                Log::error('SMS API request failed', [
-                    'phone' => $phoneNumber,
-                    'error' => $error,
-                    'status' => $response->status()
-                ]);
-
-                return [
-                    'success' => false,
-                    'message' => $error
-                ];
+                // EbulkSMS returns a string like: FAILED|reason
+                Log::error('EbulkSMS API request failed', ['recipients' => $cleanedNumbers, 'error' => $body]);
+                return ['success' => false, 'message' => 'EbulkSMS API failed: ' . $body];
             }
 
         } catch (\Exception $e) {
-            Log::error('SMS service exception', [
-                'phone' => $phoneNumber,
-                'error' => $e->getMessage()
-            ]);
-
-            return [
-                'success' => false,
-                'message' => 'SMS service error: ' . $e->getMessage()
-            ];
+            Log::error('EbulkSMS service exception', ['error' => $e->getMessage()]);
+            return ['success' => false, 'message' => 'SMS service error: ' . $e->getMessage()];
         }
     }
 
     /**
-     * Send SMS using Laravel Notifications (recommended approach)
-     */
-    public function sendSmsNotification($user, $message, $from = null)
-    {
-        try {
-            $notification = new SmsNotification($message, $from);
-            $user->notify($notification);
-            
-            Log::info('SMS notification queued successfully', [
-                'user_id' => $user->id,
-                'phone' => $user->phone_number
-            ]);
-
-            return [
-                'success' => true,
-                'message' => 'SMS notification sent successfully'
-            ];
-        } catch (\Exception $e) {
-            Log::error('SMS notification failed', [
-                'user_id' => $user->id,
-                'error' => $e->getMessage()
-            ]);
-
-            return [
-                'success' => false,
-                'message' => 'Failed to send SMS notification: ' . $e->getMessage()
-            ];
-        }
-    }
-
-    /**
-     * Clean and format phone number for Nigerian numbers
+     * Clean and format phone number(s)
      */
     protected function cleanPhoneNumber($phoneNumber)
     {
-        // Remove all non-numeric characters
         $phone = preg_replace('/[^0-9]/', '', $phoneNumber);
-        
-        // Convert Nigerian numbers to international format
         if (substr($phone, 0, 1) === '0') {
-            $phone = '+234' . substr($phone, 1);
-        } elseif (substr($phone, 0, 3) === '234') {
-            $phone = '+' . $phone;
-        } elseif (substr($phone, 0, 4) !== '+234') {
-            // Assume it's a Nigerian number without country code
-            $phone = '+234' . $phone;
-        }
-        
-        return $phone;
-    }
-
-    /**
-     * Send bulk SMS using notifications (efficient for large volumes)
-     */
-    public function sendBulkSmsNotifications(array $users, $message, $from = null)
-    {
-        try {
-            $notification = new SmsNotification($message, $from);
+            $phone = '234' . substr($phone, 1);
+        } elseif (substr($phone, 0, 3) === '234' && strlen($phone) === 13) {
             
-            // Use Laravel's notification system for bulk sending
-            Notification::send($users, $notification);
-
-            Log::info('Bulk SMS notifications queued', [
-                'user_count' => count($users),
-                'message_length' => strlen($message)
-            ]);
-
-            return [
-                'success' => true,
-                'message' => 'Bulk SMS notifications queued successfully',
-                'total' => count($users)
-            ];
-        } catch (\Exception $e) {
-            Log::error('Bulk SMS notification failed', [
-                'user_count' => count($users),
-                'error' => $e->getMessage()
-            ]);
-
-            return [
-                'success' => false,
-                'message' => 'Failed to send bulk SMS: ' . $e->getMessage()
-            ];
+        } else {
+          
+            $phone = '234' . $phone;
         }
-    }
-
-    /**
-     * Get Africa's Talking account balance
-     */
-    public function getBalance()
-    {
-        try {
-            if (empty($this->apiKey) || empty($this->username)) {
-                return ['balance' => 'N/A - API credentials not configured'];
-            }
-
-            // Use appropriate balance endpoint based on environment
-            $isSandbox = config('services.africastalking.sandbox', true);
-            $balanceUrl = $isSandbox 
-                ? 'https://api.sandbox.africastalking.com/version1/user'
-                : 'https://api.africastalking.com/version1/user';
-
-            $response = Http::withHeaders([
-                'apiKey' => $this->apiKey,
-                'Accept' => 'application/json'
-            ])->get($balanceUrl, [
-                'username' => $this->username
-            ]);
-
-            if ($response->successful()) {
-                $data = $response->json();
-                return [
-                    'balance' => $data['UserData']['balance'] ?? 'Unknown',
-                    'currency' => 'Credits'
-                ];
-            }
-
-            return ['balance' => 'Unable to fetch'];
-        } catch (\Exception $e) {
-            return ['balance' => 'Error: ' . $e->getMessage()];
-        }
-    }
-
-    /**
-     * Validate phone number format
-     */
-    public function isValidPhoneNumber($phoneNumber)
-    {
-        $cleaned = $this->cleanPhoneNumber($phoneNumber);
-        // Nigerian mobile numbers should be 14 characters (+234xxxxxxxxx)
-        return preg_match('/^\+234[7-9][0-9]{9}$/', $cleaned);
+        return $phone;
     }
 }

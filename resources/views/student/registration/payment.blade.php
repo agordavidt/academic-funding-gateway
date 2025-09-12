@@ -11,25 +11,11 @@
     <div class="step active">3</div>
 </div>
 
-<h4 class="text-center mb-4">Payment & Terms</h4>
+<h4 class="text-center mb-4">Payment</h4>
 
 <div class="alert alert-info">
     <i class="bi bi-info-circle me-2"></i>
     <strong>Registration Fee:</strong> ₦3,000 (Non-refundable)
-</div>
-
-<div class="card mb-4">
-    <div class="card-header">
-        <h6 class="mb-0">Grant Information</h6>
-    </div>
-    <div class="card-body">
-        <ul class="mb-0">
-            <li>Grant value: Up to ₦500,000</li>
-            <li>Provided as full scholarship to training programs</li>
-            <li>Subject to application review and acceptance</li>
-            <li><strong>Registration closing date: {{ date('F d, Y') }}</strong></li>
-        </ul>
-    </div>
 </div>
 
 <div class="card mb-4 border-primary">
@@ -53,90 +39,40 @@
     </div>
 </div>
 
-<form method="POST" action="{{ route('student.payment.process') }}" enctype="multipart/form-data">
-    @csrf
-    
-    <div class="form-check mb-4">
-        <input class="form-check-input @error('terms_agreed') is-invalid @enderror" 
-               type="checkbox" id="terms_agreed" name="terms_agreed" value="1">
-        <label class="form-check-label" for="terms_agreed">
-            I have read and agree to the <a href="#" data-bs-toggle="modal" data-bs-target="#termsModal">Terms and Conditions</a>
-        </label>
-        @error('terms_agreed')
-            <div class="invalid-feedback">{{ $message }}</div>
-        @enderror
+<div class="card">
+    <div class="card-header">
+        <h6 class="mb-0">Upload Payment Receipt</h6>
     </div>
-
-    <div class="card mb-4">
-        <div class="card-header">
-            <h6 class="mb-0"><i class="bi bi-upload me-2"></i>Upload Payment Evidence</h6>
-        </div>
-        <div class="card-body">
-            <div class="form-group mb-3">
-                <label for="payment_evidence" class="form-label">Payment Receipt/Evidence *</label>
+    <div class="card-body">
+        <form method="POST" action="{{ route('student.payment.process') }}" enctype="multipart/form-data">
+            @csrf
+            
+            <div class="form-group mb-4">
+                <label for="payment_evidence" class="form-label">Payment Receipt *</label>
                 <input type="file" class="form-control @error('payment_evidence') is-invalid @enderror" 
                        id="payment_evidence" name="payment_evidence" 
-                       accept=".jpg,.jpeg,.png,.pdf" required>
+                       accept="image/*,application/pdf" required>
                 @error('payment_evidence')
-                    <div class="invalid-feedback">{{ $message }}</div>
+                    <div class="invalid-feedback d-block">{{ $message }}</div>
                 @enderror
                 <small class="form-text text-muted">
-                    Upload a clear image (JPG, PNG) or PDF of your payment receipt. Maximum file size: 5MB
+                    Upload your bank transfer receipt or screenshot. Supported formats: JPG, PNG, PDF (Max: 5MB)
                 </small>
             </div>
-            
-        </div>
-    </div>
 
-    <div class="alert alert-success">
-        <i class="bi bi-clock me-2"></i>
-        <strong>Processing Time:</strong> Your application will be reviewed within 24 hours after payment verification. You will receive an email notification about the status.
+            <div class="d-grid">
+                <button type="submit" class="btn btn-success btn-lg">
+                    <i class="fas fa-upload me-2"></i>Submit Payment Receipt
+                </button>
+            </div>
+        </form>
     </div>
-
-    <div class="d-grid">
-        <button type="submit" class="btn btn-success btn-lg">
-            <i class="bi bi-check-circle me-2"></i>Submit Registration
-        </button>
-    </div>
-</form>
+</div>
 
 <div class="text-center mt-3">
     <a href="{{ route('student.profile') }}" class="btn btn-outline-secondary">
         <i class="bi bi-arrow-left me-2"></i>Back to Profile
     </a>
-</div>
-
-<div class="modal fade" id="termsModal" tabindex="-1" aria-labelledby="termsModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="termsModalLabel">Academic Funding Gateway - Terms and Conditions</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p><strong>1. Grant Nature</strong></p>
-                <p>The Academic Funding Gateway provides grants in the form of paid access to approved training programs. Grants are not provided as cash payments but as full scholarships to partner institutions.</p>
-                
-                <p><strong>2. Registration Fee</strong></p>
-                <p>A non-refundable registration fee of ₦3,000 is required to complete the application process. This fee is not deductible from the grant amount.</p>
-                
-                <p><strong>3. Application Review</strong></p>
-                <p>All applications are subject to review. Acceptance is not guaranteed and depends on available slots, eligibility criteria, and assessment results. Review process takes up to 24 hours after payment verification.</p>
-                
-                <p><strong>4. Grant Utilization</strong></p>
-                <p>Accepted applicants must utilize their grants within the specified timeframe and at designated partner institutions.</p>
-                
-                <p><strong>5. Data Usage</strong></p>
-                <p>Personal information provided will be used for application processing and communication purposes only.</p>
-                
-                <p><strong>6. Modifications</strong></p>
-                <p>The organization reserves the right to modify these terms as necessary.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-            </div>
-        </div>
-    </div>
 </div>
 
 @endsection
@@ -150,7 +86,23 @@ document.getElementById('payment_evidence').addEventListener('change', function(
         if (fileSize > 5) {
             alert('File size must be less than 5MB');
             e.target.value = '';
+            return;
         }
+        
+        // Show file name
+        const fileName = file.name;
+        const fileInfo = document.createElement('div');
+        fileInfo.className = 'alert alert-info mt-2';
+        fileInfo.innerHTML = '<i class="fas fa-file me-2"></i>Selected: ' + fileName;
+        
+        // Remove any existing file info
+        const existingInfo = document.querySelector('.alert-info.mt-2');
+        if (existingInfo) {
+            existingInfo.remove();
+        }
+        
+        // Add new file info
+        e.target.parentNode.appendChild(fileInfo);
     }
 });
 </script>

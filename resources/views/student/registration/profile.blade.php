@@ -52,13 +52,14 @@
     </div>
 
     <div class="form-group">
-        <label for="email" class="form-label">Email  *</label>
+        <label for="email" class="form-label">Email Address *</label>
         <div class="input-group">
             <span class="input-group-text">
                 <i class="fas fa-envelope text-primary"></i>
             </span>
             <input type="email" class="form-control @error('email') is-invalid @enderror" 
                    id="email" name="email" 
+                   placeholder="Enter your email address"
                    value="{{ old('email', $user->email) }}" required>
         </div>
         @error('email')
@@ -67,52 +68,32 @@
     </div>
 
     <div class="form-group">
-        <label for="school" class="form-label">School/Institution *</label>
+        <label for="school" class="form-label">School/Institution (Optional)</label>
         <div class="input-group">
             <span class="input-group-text">
                 <i class="fas fa-school text-primary"></i>
             </span>
             <input type="text" class="form-control @error('school') is-invalid @enderror" 
                    id="school" name="school" 
-                   value="{{ old('school', $user->school) }}" required>
+                   placeholder="Enter your school or institution (optional)"
+                   value="{{ old('school', $user->school) }}">
         </div>
         @error('school')
             <div class="invalid-feedback d-block">{{ $message }}</div>
         @enderror
-    </div>
-
-    <div class="form-group">
-        <label for="matriculation_number" class="form-label">Matriculation/Student Number</label>
-        <div class="input-group">
-            <span class="input-group-text">
-                <i class="fas fa-id-card text-primary"></i>
-            </span>
-            <input type="text" class="form-control @error('matriculation_number') is-invalid @enderror" 
-                   id="matriculation_number" name="matriculation_number" 
-                   value="{{ old('matriculation_number', $user->matriculation_number) }}">
-        </div>
-        @error('matriculation_number')
-            <div class="invalid-feedback d-block">{{ $message }}</div>
-        @enderror
-    </div>
-   
-
-    <div class="form-group">
-        <label for="need_assessment_text" class="form-label">Need Assessment *</label>
-        <textarea class="form-control @error('need_assessment_text') is-invalid @enderror" 
-                  id="need_assessment_text" name="need_assessment_text" rows="5" 
-                  placeholder="Please describe why you need this grant and how it will help your academic/career goals (max 1000 characters)" 
-                  required>{{ old('need_assessment_text', $application->need_assessment_text) }}</textarea>
-        @error('need_assessment_text')
-            <div class="invalid-feedback d-block">{{ $message }}</div>
-        @enderror
-        <small class="form-text text-muted">Maximum 1000 characters</small>
+        <small class="form-text text-muted">You can proceed without providing this information</small>
     </div>
 
     <div class="d-grid mt-4">
         <button type="submit" class="btn btn-primary btn-lg">
-            <i class="fas fa-arrow-right me-2"></i>Complete Registration
+            <i class="fas fa-arrow-right me-2"></i>Continue to Payment
         </button>
     </div>
 </form>
+
+<div class="text-center mt-3">
+    <a href="{{ route('student.register') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-2"></i>Back to Phone Verification
+    </a>
+</div>
 @endsection

@@ -31,12 +31,11 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
-    'africastalking' => [
-        'username' => env('AT_USERNAME'),
-        'key' => env('AT_KEY'),
-        'from' => env('AT_FROM', ''), // Optional sender ID
-        'sandbox' => env('AT_SANDBOX', true), // Set to false for production
-        'send_in_local' => env('AT_SEND_IN_LOCAL', false), // Set to true to send SMS in local environment
+    'ebulksms' => [
+        'username' => env('EBULKSMS_USERNAME'),
+        'apikey' => env('EBULKSMS_APIKEY'),
+        'sender' => env('EBULKSMS_SENDER_ID', 'YourSenderID'), // Add a sender ID
+        'send_in_local' => env('EBULKSMS_SEND_IN_LOCAL', true), // Optional, for local testing
     ],
 
 ];

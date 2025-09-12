@@ -1,0 +1,549 @@
+--- controller
+<?php
+
+namespace App\Http\Controllers\Admin;
+
+use App\Http\Controllers\Controller;
+use App\Models\User;
+use App\Models\Payment;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Carbon\Carbon;
+
+class DashboardController extends Controller
+{
+    public function index()
+    {
+        $admin = Auth::guard('admin')->user();
+        
+        $stats = [
+            'total_students' => User::count(),
+            'completed_profiles' => User::where('registration_stage', 'completed')->count(),
+            'pending_payments' => Payment::where('status', 'submitted')->count(),
+            'total_payments' => Payment::where('status', 'success')->sum('amount'),
+        ];
+
+        // Get completed registrations by month for current year
+        $currentYear = Carbon::now()->year;
+        $completedByMonth = [];
+        
+        // Initialize all months to 0
+        $months = [
+            'January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        
+        foreach ($months as $month) {
+            $completedByMonth[$month] = 0;
+        }
+        
+        // Get actual data
+        $completedRegistrations = User::whereYear('updated_at', $currentYear)
+            ->where('registration_stage', 'completed')
+            ->selectRaw('MONTH(updated_at) as month, COUNT(*) as count')
+            ->groupBy('month')
+            ->orderBy('month')
+            ->get();
+        
+        // Fill in the actual data
+        foreach ($completedRegistrations as $registration) {
+            $monthName = Carbon::create()->month($registration->month)->format('F');
+            $completedByMonth[$monthName] = $registration->count;
+        }
+
+        return view('admin.dashboard', compact('stats', 'admin', 'completedByMonth', 'currentYear'));
+    }
+}
+
+
+
+--- views
+@extends('layouts.admin')
+
+@section('title', 'Dashboard')
+
+@section('content')
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <div class="card-head-row">
+                    <div class="card-title">Dashboard Overview</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-3">
+        <div class="card card-stats card-round">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-5">
+                        <div class="icon-big text-center icon-primary bubble-shadow-small">
+                            <i class="fas fa-users"></i>
+                        </div>
+                    </div>
+                    <div class="col-7 col-stats">
+                        <div class="numbers">
+                            <p class="card-category">Total Students</p>
+                            <h4 class="card-title">{{ number_format($stats['total_students']) }}</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card card-stats card-round">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-5">
+                        <div class="icon-big text-center icon-success bubble-shadow-small">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                    </div>
+                    <div class="col-7 col-stats">
+                        <div class="numbers">
+                            <p class="card-category">Completed Profiles</p>
+                            <h4 class="card-title">{{ number_format($stats['completed_profiles']) }}</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card card-stats card-round">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-5">
+                        <div class="icon-big text-center icon-warning bubble-shadow-small">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                    </div>
+                    <div class="col-7 col-stats">
+                        <div class="numbers">
+                            <p class="card-category">Pending Reviews</p>
+                            <h4 class="card-title">{{ number_format($stats['pending_payments']) }}</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card card-stats card-round">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-5">
+                        <div class="icon-big text-center icon-info bubble-shadow-small">
+                            <i class="fas fa-money-bill-wave"></i>
+                        </div>
+                    </div>
+                    <div class="col-7 col-stats">
+                        <div class="numbers">
+                            <p class="card-category">Total Collected</p>
+                            <h4 class="card-title">₦{{ number_format($stats['total_payments']) }}</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <div class="card-head-row">
+                    <div class="card-title">Completed Registrations by Month ({{ $currentYear }})</div>
+                </div>
+            </div>
+            <div class="card-body">
+                <canvas id="registrationChart" width="400" height="100"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+@endsection
+
+@push('scripts')
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const ctx = document.getElementById('registrationChart').getContext('2d');
+    
+    const chartData = @json(array_values($completedByMonth));
+    const chartLabels = @json(array_keys($completedByMonth));
+    
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: chartLabels,
+            datasets: [{
+                label: 'Completed Registrations',
+                data: chartData,
+                borderColor: '#1f77b4',
+                backgroundColor: 'rgba(31, 119, 180, 0.1)',
+                borderWidth: 3,
+                fill: true,
+                tension: 0.4,
+                pointBackgroundColor: '#1f77b4',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                pointRadius: 6,
+                pointHoverRadius: 8,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    },
+                    grid: {
+                        color: 'rgba(0,0,0,0.1)'
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    }
+                }
+            },
+            elements: {
+                point: {
+                    hoverBackgroundColor: '#1f77b4'
+                }
+            }
+        }
+    });
+});
+</script>
+@endpush
+
+
+-- routes
+<?php
+
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Admin\AuthController;
+use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\DataImportController;
+use App\Http\Controllers\Student\RegistrationController;
+use App\Http\Controllers\Student\PaymentController;
+
+// Landing Page Route
+Route::get('/', function () {
+    return view('landing');
+})->name('landing');
+
+// Admin Authentication Routes
+Route::prefix('admin')->name('admin.')->group(function () {
+    Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
+    Route::post('/login', [AuthController::class, 'login'])->name('login.post');
+    Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+});
+
+// Protected Admin Routes
+Route::prefix('admin')->name('admin.')->middleware(['admin.auth'])->group(function () {
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    
+    // User Management - Full CRUD
+    Route::get('/users', [UserController::class, 'index'])->name('users.index');
+    Route::get('/users/{user}', [UserController::class, 'show'])->name('users.show');
+    Route::get('/users/{user}/edit', [UserController::class, 'edit'])->name('users.edit');
+    Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
+    Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
+    
+    // User Status Management
+    Route::patch('/users/{user}/status', [UserController::class, 'updateApplicationStatus'])->name('users.update-status');
+    
+    // Payment Management
+    Route::post('/users/{user}/approve-payment', [UserController::class, 'approvePayment'])->name('users.approve-payment');
+    Route::post('/users/{user}/reject-payment', [UserController::class, 'rejectPayment'])->name('users.reject-payment');
+    
+    // SMS Management
+    Route::post('/users/{user}/sms', [UserController::class, 'sendSms'])->name('users.send-sms');
+    Route::post('/users/bulk-sms', [UserController::class, 'bulkSms'])->name('users.bulk-sms');
+    Route::get('/sms/settings', [UserController::class, 'smsSettings'])->name('sms.settings');
+    Route::post('/sms/test', [UserController::class, 'testSms'])->name('sms.test');
+    Route::get('/sms/balance', [UserController::class, 'getSmsBalance'])->name('sms.balance');
+    
+    // Data Import & Manual Creation
+    Route::get('/import', [DataImportController::class, 'index'])->name('import.index');
+    Route::post('/import/upload', [DataImportController::class, 'upload'])->name('import.upload');
+    Route::post('/import/create', [DataImportController::class, 'create'])->name('import.create');
+    Route::get('/import/template', [DataImportController::class, 'downloadTemplate'])->name('import.template');
+});
+
+// Student Routes
+Route::prefix('student')->name('student.')->group(function () {
+    Route::get('/register', [RegistrationController::class, 'index'])->name('register');
+    Route::post('/verify-phone', [RegistrationController::class, 'verifyPhone'])->name('verify-phone');
+    
+    Route::get('/profile', [RegistrationController::class, 'showProfile'])->name('profile');
+    Route::post('/profile', [RegistrationController::class, 'updateProfile'])->name('profile.update');
+    
+    Route::get('/payment', [RegistrationController::class, 'showPayment'])->name('payment');
+    Route::post('/payment', [RegistrationController::class, 'processPayment'])->name('payment.process');
+    
+    Route::get('/status', [RegistrationController::class, 'status'])->name('status');
+});
+
+
+
+
+-- user view@extends('layouts.student')
+
+@section('title', 'Payment')
+
+@section('content')
+<div class="step-indicator">
+    <div class="step completed">1</div>
+    <div class="step-connector completed"></div>
+    <div class="step completed">2</div>
+    <div class="step-connector completed"></div>
+    <div class="step active">3</div>
+</div>
+
+<h4 class="text-center mb-4">Payment</h4>
+
+<div class="alert alert-info">
+    <i class="bi bi-info-circle me-2"></i>
+    <strong>Registration Fee:</strong> ₦3,000 (Non-refundable)
+</div>
+
+<div class="card mb-4 border-primary">
+    <div class="card-header bg-primary text-white">
+        <h6 class="mb-0"><i class="bi bi-bank me-2"></i>Bank Transfer Details</h6>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <p class="mb-2"><strong>Account Number:</strong> <span class="text-primary fs-5">1028614880</span></p>
+                <p class="mb-2"><strong>Bank Name:</strong> UBA (United Bank for Africa)</p>
+                <p class="mb-0"><strong>Account Name:</strong> Academic Funding Gateway Network</p>
+            </div>
+            <div class="col-md-6">
+                <div class="alert alert-warning mb-0">
+                    <small><i class="bi bi-exclamation-triangle me-1"></i>
+                    <strong>Important:</strong> Please use your phone number ({{ $user->phone_number }}) as the transfer reference/narration for easy identification.</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h6 class="mb-0">Upload Payment Receipt</h6>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ route('student.payment.process') }}" enctype="multipart/form-data">
+            @csrf
+            
+            <div class="form-group mb-4">
+                <label for="payment_evidence" class="form-label">Payment Receipt *</label>
+                <input type="file" class="form-control @error('payment_evidence') is-invalid @enderror" 
+                       id="payment_evidence" name="payment_evidence" 
+                       accept="image/*,application/pdf" required>
+                @error('payment_evidence')
+                    <div class="invalid-feedback d-block">{{ $message }}</div>
+                @enderror
+                <small class="form-text text-muted">
+                    Upload your bank transfer receipt or screenshot. Supported formats: JPG, PNG, PDF (Max: 5MB)
+                </small>
+            </div>
+
+            <div class="d-grid">
+                <button type="submit" class="btn btn-success btn-lg">
+                    <i class="fas fa-upload me-2"></i>Submit Payment Receipt
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="text-center mt-3">
+    <a href="{{ route('student.profile') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-2"></i>Back to Profile
+    </a>
+</div>
+
+@endsection
+
+@push('scripts')
+<script>
+document.getElementById('payment_evidence').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        const fileSize = file.size / 1024 / 1024; // Convert to MB
+        if (fileSize > 5) {
+            alert('File size must be less than 5MB');
+            e.target.value = '';
+            return;
+        }
+        
+        // Show file name
+        const fileName = file.name;
+        const fileInfo = document.createElement('div');
+        fileInfo.className = 'alert alert-info mt-2';
+        fileInfo.innerHTML = '<i class="fas fa-file me-2"></i>Selected: ' + fileName;
+        
+        // Remove any existing file info
+        const existingInfo = document.querySelector('.alert-info.mt-2');
+        if (existingInfo) {
+            existingInfo.remove();
+        }
+        
+        // Add new file info
+        e.target.parentNode.appendChild(fileInfo);
+    }
+});
+</script>
+@endpush
+
+
+-- Models
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
+
+class User extends Authenticatable
+{
+    use HasApiTokens, HasFactory, Notifiable;
+
+    protected $fillable = [
+        'first_name',
+        'last_name',
+        'email',
+        'phone_number',
+        'school',
+        'registration_stage',
+        'payment_status',
+        'application_status',
+        'email_verified_at',
+        'password',
+    ];
+
+    protected $hidden = [
+        'password',
+        'remember_token',
+    ];
+
+    protected $casts = [
+        'email_verified_at' => 'datetime',
+        'password' => 'hashed',
+    ];
+
+    /**
+     * Mutator to clean and format the phone number before saving.
+     * Handles Nigerian phone numbers starting with 0
+     *
+     * @param  string  $value
+     * @return void
+     */
+    public function setPhoneNumberAttribute($value)
+    {
+        $this->attributes['phone_number'] = self::cleanPhoneNumberStatic($value);
+    }
+
+    /**
+     * Static method to clean and format Nigerian phone numbers.
+     * All numbers should start with 0 (Nigerian format)
+     *
+     * @param string $phoneNumber
+     * @return string
+     */
+    public static function cleanPhoneNumberStatic($phoneNumber)
+    {
+        // Remove all non-numeric characters
+        $phone = preg_replace('/[^0-9]/', '', $phoneNumber);
+
+        // If it starts with +234, convert to 0 format
+        if (substr($phone, 0, 3) === '234') {
+            return '0' . substr($phone, 3);
+        }
+
+        // If it doesn't start with 0, add it (assuming it's a valid Nigerian number)
+        if (substr($phone, 0, 1) !== '0' && strlen($phone) === 10) {
+            return '0' . $phone;
+        }
+
+        return $phone;
+    }
+
+    /**
+     * Get the user's full name
+     */
+    public function getFullNameAttribute()
+    {
+        return $this->first_name . ' ' . $this->last_name;
+    }
+
+    /**
+     * Check if user has a valid Nigerian phone number
+     */
+    public function hasValidPhoneNumber()
+    {
+        if (!$this->phone_number) {
+            return false;
+        }
+
+        // Nigerian phone numbers start with 0 and have 11 digits
+        return preg_match('/^0[789][0-9]{9}$/', $this->phone_number);
+    }
+
+    /**
+     * Relationships
+     */
+    public function payments()
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    public function notifications()
+    {
+        return $this->hasMany(Notification::class);
+    }
+
+    /**
+     * Scopes
+     */
+    public function scopeWithValidPhone($query)
+    {
+        return $query->whereNotNull('phone_number')
+                    ->where('phone_number', '!=', '');
+    }
+
+    public function scopeWithPaymentStatus($query, $status)
+    {
+        return $query->where('payment_status', $status);
+    }
+
+    public function scopeWithApplicationStatus($query, $status)
+    {
+        return $query->where('application_status', $status);
+    }
+}

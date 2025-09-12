@@ -15,8 +15,7 @@ return new class extends Migration
             $table->string('email')->unique()->nullable();
             $table->string('first_name');
             $table->string('last_name');           
-            $table->string('school')->nullable();
-            $table->string('matriculation_number')->nullable();
+            $table->string('school')->nullable();          
             $table->enum('registration_stage', ['imported', 'profile_completion', 'payment', 'completed'])->default('imported');
             $table->enum('payment_status', ['pending', 'paid'])->default('pending');
             $table->enum('application_status', ['pending', 'reviewing', 'accepted', 'rejected'])->default('pending');

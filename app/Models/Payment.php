@@ -14,27 +14,28 @@ class Payment extends Model
         'transaction_id',
         'amount',
         'status',
-        'paid_at',
-        'gateway_response',
         'payment_evidence',
-        'payment_note',
+        'gateway_response',
     ];
 
     protected $casts = [
-        'paid_at' => 'datetime',
+        'amount' => 'decimal:2',
         'gateway_response' => 'array',
     ];
 
+    /**
+     * Relationship with User
+     */
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
+    /**
+     * Get the payment evidence URL
+     */
     public function getPaymentEvidenceUrlAttribute()
     {
-        if ($this->payment_evidence) {
-            return asset('storage/' . $this->payment_evidence);
-        }
-        return null;
+        return $this->payment_evidence ? asset('storage/' . $this->payment_evidence) : null;
     }
 }

@@ -17,10 +17,9 @@ class User extends Authenticatable
         'email',
         'phone_number',
         'school',
-        'matriculation_number',
-        'application_status',
-        'payment_status',
         'registration_stage',
+        'payment_status',
+        'application_status',
         'email_verified_at',
         'password',
     ];
@@ -37,7 +36,7 @@ class User extends Authenticatable
 
     /**
      * Mutator to clean and format the phone number before saving.
-     * This handles both manual and imported data.
+     * Handles Nigerian phone numbers starting with 0
      *
      * @param  string  $value
      * @return void
@@ -46,21 +45,10 @@ class User extends Authenticatable
     {
         $this->attributes['phone_number'] = self::cleanPhoneNumberStatic($value);
     }
-    
-    /**
-     * Route notifications for the Africa's Talking channel.
-     *
-     * @param  \Illuminate\Notifications\Notification  $notification
-     * @return string
-     */
-    public function routeNotificationForAfricasTalking($notification)
-    {
-        // The phone number is already clean due to the mutator
-        return $this->phone_number;
-    }
 
     /**
-     * Static method to clean and format phone numbers.
+     * Static method to clean and format Nigerian phone numbers.
+     * All numbers should start with 0 (Nigerian format)
      *
      * @param string $phoneNumber
      * @return string
@@ -70,30 +58,20 @@ class User extends Authenticatable
         // Remove all non-numeric characters
         $phone = preg_replace('/[^0-9]/', '', $phoneNumber);
 
-        // Check if the number is already in the international format
-        if (substr($phone, 0, 4) === '+234') {
-            return $phone; // It's already correctly formatted
-        }
-
-        // Add the country code if it starts with '0'
-        if (substr($phone, 0, 1) === '0') {
-            return '+234' . substr($phone, 1);
-        }
-        
-        // Add the country code if it starts with '234'
+        // If it starts with +234, convert to 0 format
         if (substr($phone, 0, 3) === '234') {
-            return '+' . $phone;
+            return '0' . substr($phone, 3);
         }
 
-        // If it's a 10-digit number without a leading zero, assume it's a Nigerian number and add +234
-        if (strlen($phone) === 10) {
-            return '+234' . $phone;
+        // If it doesn't start with 0, add it (assuming it's a valid Nigerian number)
+        if (substr($phone, 0, 1) !== '0' && strlen($phone) === 10) {
+            return '0' . $phone;
         }
 
-        return $phone; // Return as-is if none of the patterns match
+        return $phone;
     }
 
-   /**
+    /**
      * Get the user's full name
      */
     public function getFullNameAttribute()
@@ -102,7 +80,7 @@ class User extends Authenticatable
     }
 
     /**
-     * Check if user has a valid phone number for SMS
+     * Check if user has a valid Nigerian phone number
      */
     public function hasValidPhoneNumber()
     {
@@ -110,19 +88,13 @@ class User extends Authenticatable
             return false;
         }
 
-        $cleaned = $this->cleanPhoneNumber($this->phone_number);
-        // Nigerian mobile numbers should be 14 characters (+234xxxxxxxxx)
-        return preg_match('/^\+234[7-9][0-9]{9}$/', $cleaned);
+        // Nigerian phone numbers start with 0 and have 11 digits
+        return preg_match('/^0[789][0-9]{9}$/', $this->phone_number);
     }
 
     /**
      * Relationships
      */
-    public function application()
-    {
-        return $this->hasOne(Application::class);
-    }
-
     public function payments()
     {
         return $this->hasMany(Payment::class);
@@ -131,11 +103,6 @@ class User extends Authenticatable
     public function notifications()
     {
         return $this->hasMany(Notification::class);
-    }
-
-    public function trainingInstitution()
-    {
-        return $this->belongsTo(TrainingInstitution::class);
     }
 
     /**
@@ -156,10 +123,4 @@ class User extends Authenticatable
     {
         return $query->where('application_status', $status);
     }
-
-    public function scopeFromSchool($query, $school)
-    {
-        return $query->where('school', 'like', "%{$school}%");
-    }
-
 }
