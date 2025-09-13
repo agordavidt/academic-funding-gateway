@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Student;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Payment;
+use App\Models\Setting; // Don't forget to import the Setting model
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon; // Import Carbon for date handling
 
 class RegistrationController extends Controller
 {
@@ -90,21 +92,21 @@ class RegistrationController extends Controller
             return redirect()->route('student.profile');
         }
 
-        if ($user->payment_status === 'paid') {
-            return redirect()->route('student.status');
+        // Check for payment status
+        $payment = Payment::where('user_id', $user->id)->first();
+        if ($payment && $payment->status === 'submitted') {
+            return redirect()->route('student.status')->with('info', 'Your payment evidence has already been submitted and is pending review.');
+        }
+        if ($payment && $payment->status === 'success') {
+             return redirect()->route('student.status')->with('info', 'Your payment has been approved. Your application is now complete.');
         }
 
-        // Create payment record if it doesn't exist
-        $payment = Payment::firstOrCreate(
-            ['user_id' => $user->id, 'status' => 'pending'],
-            [
-                'transaction_id' => 'TXN_' . time() . '_' . $user->id,
-                'amount' => 3000.00,
-                'status' => 'pending',
-            ]
-        );
-
-        return view('student.registration.payment', compact('user', 'payment'));
+        // Fetch the application deadline from the database
+        $deadlineSetting = Setting::where('key', 'application_deadline')->first();
+        $deadline = $deadlineSetting ? Carbon::parse($deadlineSetting->value) : null;
+        
+        // Pass the deadline to the view
+        return view('student.registration.payment', compact('user', 'deadline'));
     }
 
     public function processPayment(Request $request)
@@ -183,6 +185,14 @@ class RegistrationController extends Controller
 
     public function status()
     {
-        return view('student.registration.status');
+        $userId = session('registration_user_id');
+        if (!$userId) {
+            return redirect()->route('student.register');
+        }
+
+        $user = User::findOrFail($userId);
+        $payment = $user->payments()->latest()->first();
+
+        return view('student.registration.status', compact('user', 'payment'));
     }
 }

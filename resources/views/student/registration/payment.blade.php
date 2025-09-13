@@ -3,6 +3,16 @@
 @section('title', 'Payment')
 
 @section('content')
+
+@if($deadline)
+    <div class="card text-center text-white bg-warning mb-3">
+        <div class="card-body">
+            <h5 class="card-title"><i class="bi bi-clock me-2"></i> Application Deadline</h5>
+            <p class="card-text fs-4">{{ $deadline->format('F d, Y \a\t h:i A') }}</p>
+        </div>
+    </div>
+@endif
+
 <div class="step-indicator">
     <div class="step completed">1</div>
     <div class="step-connector completed"></div>
@@ -10,6 +20,7 @@
     <div class="step-connector completed"></div>
     <div class="step active">3</div>
 </div>
+
 
 <h4 class="text-center mb-4">Payment</h4>
 
@@ -24,17 +35,11 @@
     </div>
     <div class="card-body">
         <div class="row">
-            <div class="col-md-6">
+            <div class="col-md-12">
                 <p class="mb-2"><strong>Account Number:</strong> <span class="text-primary fs-5">1028614880</span></p>
                 <p class="mb-2"><strong>Bank Name:</strong> UBA (United Bank for Africa)</p>
                 <p class="mb-0"><strong>Account Name:</strong> Academic Funding Gateway Network</p>
-            </div>
-            <div class="col-md-6">
-                <div class="alert alert-warning mb-0">
-                    <small><i class="bi bi-exclamation-triangle me-1"></i>
-                    <strong>Important:</strong> Please use your phone number ({{ $user->phone_number }}) as the transfer reference/narration for easy identification.</small>
-                </div>
-            </div>
+            </div>            
         </div>
     </div>
 </div>

@@ -57,24 +57,24 @@
     </div>
 
     <div class="col-md-3">
-        <div class="card card-stats card-round">
-            <div class="card-body">
-                <div class="row align-items-center">
-                    <div class="col-5">
-                        <div class="icon-big text-center icon-warning bubble-shadow-small">
-                            <i class="fas fa-clock"></i>
-                        </div>
+    <div class="card card-stats card-round">
+        <div class="card-body">
+            <div class="row align-items-center">
+                <div class="col-5">
+                    <div class="icon-big text-center icon-warning bubble-shadow-small">
+                        <i class="fas fa-clock"></i>
                     </div>
-                    <div class="col-7 col-stats">
-                        <div class="numbers">
-                            <p class="card-category">Pending Reviews</p>
-                            <h4 class="card-title">{{ number_format($stats['pending_payments']) }}</h4>
-                        </div>
+                </div>
+                <div class="col-7 col-stats">
+                    <div class="numbers">
+                        <p class="card-category">Pending Reviews</p>
+                        <h4 class="card-title">{{ number_format($stats['pending_reviews']) }}</h4>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+</div>
 
     <div class="col-md-3">
         <div class="card card-stats card-round">

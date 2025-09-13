@@ -109,6 +109,12 @@
                   <p>Import Data</p>
                 </a>
               </li>
+               <li class="nav-item {{ request()->routeIs('admin.settings.deadline.index') ? 'active' : '' }}">
+                <a href="{{ route('admin.settings.deadline.index') }}">
+                  <i class="fas fa-file-import"></i>
+                  <p>Settings</p>
+                </a>
+              </li>
               <li class="nav-item sidebar-logout">
                 <form action="{{ route('admin.logout') }}" method="POST">
                   @csrf

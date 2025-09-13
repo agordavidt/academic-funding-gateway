@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\DataImportController;
+use App\Http\Controllers\Admin\SettingController;
 use App\Http\Controllers\Student\RegistrationController;
 use App\Http\Controllers\Student\PaymentController;
 
@@ -50,6 +51,10 @@ Route::prefix('admin')->name('admin.')->middleware(['admin.auth'])->group(functi
     Route::post('/import/upload', [DataImportController::class, 'upload'])->name('import.upload');
     Route::post('/import/create', [DataImportController::class, 'create'])->name('import.create');
     Route::get('/import/template', [DataImportController::class, 'downloadTemplate'])->name('import.template');
+
+    // Application Settings
+    Route::get('/settings/application-deadline', [SettingController::class, 'index'])->name('settings.deadline.index');
+    Route::post('/settings/application-deadline', [SettingController::class, 'store'])->name('settings.deadline.store');
 });
 
 // Student Routes
