@@ -52,7 +52,7 @@
                         <div class="form-group">
                             <label class="form-label"><strong>Matriculation Number</strong></label>
                             <p>{{ $user->matriculation_number ?: 'N/A' }}</p>
-                        </div>                        
+                        </div>          
                         <div class="form-group">
                             <label class="form-label"><strong>Registration Stage</strong></label>
                             <p>
@@ -77,12 +77,16 @@
         </div>
 
         @if($user->payments()->where('payment_evidence', '!=', null)->exists())
-        <!-- Payment Evidence Section -->
         <div class="card mt-3">
             <div class="card-header">
                 <div class="card-title">Payment Evidence</div>
             </div>
             <div class="card-body">
+                {{-- Initialize a flag to only show one approval card --}}
+                @php
+                    $pendingPaymentFound = false;
+                @endphp
+                
                 @foreach($user->payments()->where('payment_evidence', '!=', null)->get() as $payment)
                 <div class="border rounded p-3 mb-3">
                     <div class="row">
@@ -114,7 +118,6 @@
                                         <br><small class="text-muted">Click to view full size</small>
                                     </div>
 
-                                    <!-- Image Modal -->
                                     <div class="modal fade" id="imageModal{{ $payment->id }}" tabindex="-1">
                                         <div class="modal-dialog modal-lg">
                                             <div class="modal-content">
@@ -150,63 +153,65 @@
                         </div>
                     </div>
 
-                    <!-- Fixed Payment Approval Section in user show view -->
-                    @if($payment->status === 'submitted')
-                    <hr>
-                    <div class="row">
-                        <div class="col-12">
-                            <!-- Approval Form -->
-                            <form method="POST" action="{{ route('admin.users.approve-payment', $user) }}" class="mb-2">
-                                @csrf
-                                <div class="input-group input-group-sm mb-2">
-                                    <input type="text" name="approval_note" class="form-control" 
-                                        placeholder="Approval note (optional)" maxlength="200">
-                                    <button type="submit" class="btn btn-success">
-                                        <i class="fas fa-check me-1"></i>Approve Payment
-                                    </button>
-                                </div>
-                            </form>
-                            
-                            <!-- Reject Button -->
-                            <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" 
-                                    data-bs-target="#rejectModal{{ $payment->id }}">
-                                <i class="fas fa-times me-1"></i>Reject Payment
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Rejection Modal -->
-                    <div class="modal fade" id="rejectModal{{ $payment->id }}" tabindex="-1">
-                        <div class="modal-dialog">
-                            <div class="modal-content">
-                                <div class="modal-header">
-                                    <h5 class="modal-title">Reject Payment</h5>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                </div>
-                                <form method="POST" action="{{ route('admin.users.reject-payment', $user) }}">
+                    {{-- Conditionally display the approval/rejection buttons for only the first submitted payment found --}}
+                    @if($payment->status === 'submitted' && !$pendingPaymentFound)
+                        <hr>
+                        <div class="row">
+                            <div class="col-12">
+                                <form method="POST" action="{{ route('admin.users.payments.approve', ['user' => $user->id, 'payment' => $payment->id]) }}" class="mb-2">
                                     @csrf
-                                    <div class="modal-body">
-                                        <div class="form-group">
-                                            <label for="rejectionReason{{ $payment->id }}" class="form-label">Reason for Rejection</label>
-                                            <textarea class="form-control" id="rejectionReason{{ $payment->id }}" 
-                                                    name="rejection_reason" rows="3" required 
-                                                    placeholder="Please provide a clear reason for rejecting this payment..."></textarea>
-                                        </div>
-                                        <div class="alert alert-warning">
-                                            <i class="fas fa-exclamation-triangle me-2"></i>
-                                            The user will be notified via email/SMS about the rejection and reason.
-                                        </div>
-                                    </div>
-                                    <div class="modal-footer">
-                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                        <button type="submit" class="btn btn-danger">
-                                            <i class="fas fa-times me-2"></i>Reject Payment
+                                    <div class="input-group input-group-sm mb-2">
+                                        <input type="text" name="approval_note" class="form-control" 
+                                               placeholder="Approval note (optional)" maxlength="200">
+                                        <button type="submit" class="btn btn-success">
+                                            <i class="fas fa-check me-1"></i>Approve Payment
                                         </button>
                                     </div>
                                 </form>
+                                
+                                <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" 
+                                        data-bs-target="#rejectModal{{ $payment->id }}">
+                                    <i class="fas fa-times me-1"></i>Reject Payment
+                                </button>
                             </div>
                         </div>
-                    </div>
+
+                        <div class="modal fade" id="rejectModal{{ $payment->id }}" tabindex="-1">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Reject Payment</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <form method="POST" action="{{ route('admin.users.payments.reject', ['user' => $user->id, 'payment' => $payment->id]) }}">
+                                        @csrf
+                                        <div class="modal-body">
+                                            <div class="form-group">
+                                                <label for="rejectionReason{{ $payment->id }}" class="form-label">Reason for Rejection</label>
+                                                <textarea class="form-control" id="rejectionReason{{ $payment->id }}" 
+                                                          name="rejection_reason" rows="3" required 
+                                                          placeholder="Please provide a clear reason for rejecting this payment..."></textarea>
+                                            </div>
+                                            <div class="alert alert-warning">
+                                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                                The user will be notified via email/SMS about the rejection and reason.
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                            <button type="submit" class="btn btn-danger">
+                                                <i class="fas fa-times me-2"></i>Reject Payment
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {{-- Set the flag to true after the first pending payment is found --}}
+                        @php
+                            $pendingPaymentFound = true;
+                        @endphp
                     @endif
 
                     @if($payment->status === 'rejected' && isset($payment->gateway_response['rejection_reason']))
@@ -333,7 +338,6 @@
             </div>
         </div>
 
-        <!-- Quick Actions Card -->
         <div class="card mt-3">
             <div class="card-header">
                 <div class="card-title">Quick Actions</div>
@@ -360,7 +364,6 @@
     </div>
 </div>
 
-<!-- SMS Modal -->
 <div class="modal fade" id="smsModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">

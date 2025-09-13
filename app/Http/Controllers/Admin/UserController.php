@@ -7,6 +7,8 @@ use App\Models\User;
 use App\Models\Payment;
 use App\Services\NotificationService;
 use App\Services\SmsService;
+use Illuminate\Support\Facades\DB; 
+use Illuminate\Support\Facades\Auth; 
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -162,77 +164,97 @@ class UserController extends Controller
         return back()->with('success', 'Application status updated successfully.');
     }
 
-    public function approvePayment(Request $request, User $user)
-    {
-        $payment = $user->payments()->where('status', 'submitted')->first();
-        
-        if (!$payment) {
-            return back()->with('error', 'No pending payment found for this user.');
-        }
+ 
 
-        $payment->update([
-            'status' => 'success',
-            'gateway_response' => json_encode(array_merge(
-                json_decode($payment->gateway_response ?? '{}', true), 
-                [
-                    'approved_by' => auth('admin')->user()->name ?? 'Admin',
-                    'approved_at' => now()->toISOString(),
-                    'approval_note' => $request->approval_note
-                ]
-            ))
-        ]);
-
-        $user->update([
-            'payment_status' => 'paid'
-        ]);
-
-        try {
-            $this->notificationService->sendPaymentApproved($user, $payment);
-            return back()->with('success', 'Payment approved successfully. User has been notified.');
-        } catch (Exception $e) {
-            Log::error('Failed to send payment approval notification: ' . $e->getMessage(), [
-                'user_id' => $user->id,
-                'payment_id' => $payment->id
-            ]);
-            return back()->with('warning', 'Payment approved, but notification failed. Error: ' . $e->getMessage());
-        }
+    public function approvePayment(Request $request, User $user, Payment $payment)
+{
+    // Safety check to ensure an admin is authenticated
+    if (!Auth::guard('admin')->check()) {
+        return back()->with('error', 'Authentication error. Please log in again.');
     }
 
-    public function rejectPayment(Request $request, User $user)
-    {
-        $request->validate([
-            'rejection_reason' => 'required|string|max:500'
-        ]);
-
-        $payment = $user->payments()->where('status', 'submitted')->first();
-        
-        if (!$payment) {
-            return back()->with('error', 'No pending payment found for this user.');
-        }
-
-        $payment->update([
-            'status' => 'rejected',
-            'gateway_response' => json_encode(array_merge(
-                json_decode($payment->gateway_response ?? '{}', true), 
-                [
-                    'rejected_by' => auth('admin')->user()->name ?? 'Admin',
-                    'rejected_at' => now()->toISOString(),
-                    'rejection_reason' => $request->rejection_reason
-                ]
-            ))
-        ]);
-
-        try {
-            $this->notificationService->sendPaymentRejected($user, $payment, $request->rejection_reason);
-            return back()->with('success', 'Payment rejected. User has been notified.');
-        } catch (Exception $e) {
-            Log::error('Failed to send payment rejection notification: ' . $e->getMessage(), [
-                'user_id' => $user->id,
-                'payment_id' => $payment->id
-            ]);
-            return back()->with('warning', 'Payment rejected, but notification failed. Error: ' . $e->getMessage());
-        }
+    // Check if the payment belongs to the user
+    if ($payment->user_id !== $user->id) {
+        return back()->with('error', 'Payment does not belong to this user.');
     }
+
+    // Check if the payment is in the 'submitted' status
+    if ($payment->status !== 'submitted') {
+        return back()->with('error', 'Payment cannot be approved as its status is not "submitted".');
+    }
+
+    DB::beginTransaction();
+    try {
+        $approvalNote = $request->input('approval_note');
+        
+        // Get the authenticated user
+        $adminUser = Auth::guard('admin')->user();
+        
+        // Update the payment record
+        $payment->status = 'success';
+        $payment->gateway_response = [
+            'approved_by' => $adminUser->full_name,
+            'approved_at' => now(),
+            'approval_note' => $approvalNote,
+        ];
+        $payment->save();
+
+        // Update the user's payment status to 'paid'
+        $user->payment_status = 'paid';
+        $user->save();
+
+        DB::commit();
+
+        return back()->with('success', 'Payment approved successfully and user status updated to "paid".');
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return back()->with('error', 'Failed to approve payment: ' . $e->getMessage());
+    }
+}
+
+  public function rejectPayment(Request $request, User $user, Payment $payment)
+{
+    // Safety check to ensure an admin is authenticated
+    if (!Auth::guard('admin')->check()) {
+        return back()->with('error', 'Authentication error. Please log in again.');
+    }
+
+    $request->validate([
+        'rejection_reason' => 'required|string|max:255',
+    ]);
+
+    // Check if the payment belongs to the user
+    if ($payment->user_id !== $user->id) {
+        return back()->with('error', 'Payment does not belong to this user.');
+    }
+    
+    // Check if the payment is in the 'submitted' status
+    if ($payment->status !== 'submitted') {
+        return back()->with('error', 'Payment cannot be rejected as its status is not "submitted".');
+    }
+
+    DB::beginTransaction();
+    try {
+        $adminUser = Auth::guard('admin')->user();
+
+        // Update the payment record
+        $payment->status = 'rejected';
+        $payment->gateway_response = [
+            'rejected_by' => $adminUser->full_name,
+            'rejected_at' => now(),
+            'rejection_reason' => $request->input('rejection_reason'),
+        ];
+        $payment->save();
+
+        DB::commit();
+        return back()->with('success', 'Payment rejected successfully.');
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return back()->with('error', 'Failed to reject payment: ' . $e->getMessage());
+    }
+}
 
     public function sendSms(Request $request, User $user)
     {

@@ -36,8 +36,8 @@ Route::prefix('admin')->name('admin.')->middleware(['admin.auth'])->group(functi
     Route::patch('/users/{user}/status', [UserController::class, 'updateApplicationStatus'])->name('users.update-status');
     
     // Payment Management
-    Route::post('/users/{user}/approve-payment', [UserController::class, 'approvePayment'])->name('users.approve-payment');
-    Route::post('/users/{user}/reject-payment', [UserController::class, 'rejectPayment'])->name('users.reject-payment');
+    Route::post('/users/{user}/payments/{payment}/approve', [UserController::class, 'approvePayment'])->name('users.payments.approve');
+    Route::post('/users/{user}/payments/{payment}/reject', [UserController::class, 'rejectPayment'])->name('users.payments.reject');
     
     // SMS Management
     Route::post('/users/{user}/sms', [UserController::class, 'sendSms'])->name('users.send-sms');

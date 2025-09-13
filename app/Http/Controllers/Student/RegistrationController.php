@@ -5,11 +5,11 @@ namespace App\Http\Controllers\Student;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Payment;
-use App\Models\Setting; // Don't forget to import the Setting model
+use App\Models\Setting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
-use Carbon\Carbon; // Import Carbon for date handling
+use Carbon\Carbon;
 
 class RegistrationController extends Controller
 {
@@ -120,7 +120,7 @@ class RegistrationController extends Controller
             $user = User::findOrFail($userId);
 
             $request->validate([
-                'payment_evidence' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120', // 5MB max
+                'payment_evidence' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',
             ]);
 
             // Handle file upload with proper error handling
@@ -167,9 +167,8 @@ class RegistrationController extends Controller
             $user->update([
                 'registration_stage' => 'completed'
             ]);
-
-            session()->forget('registration_user_id');
             
+            // Redirect to the status page. The session ID is NOT forgotten here.
             return redirect()->route('student.status')->with('success', 'Payment evidence submitted successfully! Your application will be reviewed within 24 hours.');
             
         } catch (\Exception $e) {
@@ -186,12 +185,17 @@ class RegistrationController extends Controller
     public function status()
     {
         $userId = session('registration_user_id');
+        
+        // This check is necessary to prevent users from navigating directly here.
         if (!$userId) {
             return redirect()->route('student.register');
         }
 
         $user = User::findOrFail($userId);
         $payment = $user->payments()->latest()->first();
+        
+        // Forget the session user ID AFTER it has been successfully used.
+        session()->forget('registration_user_id');
 
         return view('student.registration.status', compact('user', 'payment'));
     }
