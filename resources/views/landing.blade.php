@@ -5,7 +5,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="description" content="Academic Funding Gateway empowers Nigerian students with grants, training, and mentorship to become entrepreneurs and leaders." />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" href="{{ asset('img/favicon.png') }}" />
+    <link rel="icon" href="{{ asset('assets/img/logo-favicon.png') }}" />
     <link rel="apple-touch-icon" href="{{ asset('img/apple-touch-icon.png') }}" />
     <link rel="manifest" href="{{ asset('manifest.webmanifest') }}" />
     <link rel="preconnect" href="https://fonts.gstatic.com" />
@@ -15,22 +15,7 @@
     <script defer src="https://unpkg.com/smoothscroll-polyfill@0.4.4/dist/smoothscroll.min.js"></script>
     <title>Academic Funding Gateway &mdash; From Student to CEO</title>
     <style>
-        /* Your CSS styles remain exactly the same */
         :root {
-            --color-light-background: #f9f7f0;
-            --color-primary: #18b7be;
-            --color-secondary: #178ca4;
-            --color-dark: #072a40;
-        }
-        * {
-            padding: 0;
-            margin: 0;
-            box-sizing: border-box;
-        }
-        
-
-
-         :root {
             --color-light-background: #f9f7f0;
             --color-primary: #18b7be;
             --color-secondary: #178ca4;
@@ -209,7 +194,7 @@
             position: relative;
         }
         .logo {
-            height: 2.2rem;
+            height: clamp(2.8rem, 4vw, 3.2rem);
         }
         .main-nav-list {
             list-style: none;
@@ -342,6 +327,8 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            overflow: hidden;
+            border-radius: 11px;
         }
         .step-img-box::before,
         .step-img-box::after {
@@ -366,7 +353,10 @@
             z-index: -1;
         }
         .step-img {
-            width: 35%;
+            width: 100%;
+            max-width: 50%;
+            object-fit: cover;
+            border-radius: 11px;
         }
         .section-offers {
             padding: 9.6rem 0;
@@ -484,6 +474,8 @@
         .logo-col {
             display: flex;
             flex-direction: column;
+            align-items: center;
+            text-align: center;
         }
         .footer-logo {
             display: block;
@@ -503,6 +495,7 @@
             line-height: 1.6;
             color: #767676;
             margin-top: auto;
+            text-align: center;
         }
         .footer-heading {
             font-size: 1.8rem;
@@ -513,6 +506,7 @@
             font-style: normal;
             font-size: 1.6rem;
             line-height: 1.6;
+            text-align: center;
         }
         .address {
             margin-bottom: 2.4rem;
@@ -534,12 +528,115 @@
         .footer-link:active {
             color: var(--color-primary);
         }
+        /* Responsive Design */
+        @media (max-width: 75em) {
+            .container {
+                max-width: 96rem;
+                padding: 0 2.4rem;
+            }
+            .grid--2-cols,
+            .grid--3-cols,
+            .grid--4-cols {
+                grid-template-columns: 1fr;
+            }
+            .hero {
+                grid-template-columns: 1fr;
+                text-align: center;
+                gap: 4.8rem;
+            }
+            .cta {
+                grid-template-columns: 1fr;
+            }
+            .cta-text-box {
+                padding: 3.2rem 4rem;
+            }
+            .cta-img-box {
+                min-height: 20rem;
+            }
+            .heading-primary {
+                font-size: 4.4rem;
+            }
+            .heading-secondary {
+                font-size: 3.6rem;
+            }
+            .heading-tertiary {
+                font-size: 2.4rem;
+            }
+            .hero-description,
+            .step-description,
+            .offer-attribute,
+            .cta-text {
+                font-size: 1.6rem;
+            }
+        }
+        @media (max-width: 59em) {
+            html {
+                font-size: 56.25%;
+            }
+            .header {
+                padding: 0 2.4rem;
+            }
+            .main-nav {
+                display: none;
+                position: absolute;
+                top: 100%;
+                left: 0;
+                width: 100%;
+                background-color: var(--color-light-background);
+                padding: 2.4rem;
+                z-index: 1000;
+            }
+            .main-nav.active {
+                display: block;
+            }
+            .main-nav-list {
+                flex-direction: column;
+                gap: 2.4rem;
+                align-items: center;
+            }
+            .btn-mobile-nav {
+                display: block;
+            }
+            .btn-mobile-nav[aria-expanded="true"] .icon-mobile-nav[name="menu-outline"] {
+                display: none;
+            }
+            .btn-mobile-nav[aria-expanded="true"] .icon-mobile-nav[name="close-outline"] {
+                display: block;
+            }
+            .section-hero {
+                padding: 3.2rem 0 6.4rem 0;
+            }
+            .step-img-box {
+                display: none;
+            }
+        }
+        @media (max-width: 34em) {
+            html {
+                font-size: 50%;
+            }
+            .container {
+                padding: 0 1.6rem;
+            }
+            .section-how,
+            .section-offers,
+            .section-cta {
+                padding: 6.4rem 0;
+            }
+            .logos {
+                flex-direction: column;
+                align-items: center;
+                gap: 2rem;
+            }
+            .logos img {
+                height: 2.8rem;
+            }
+        }
     </style>
 </head>
 <body>
     <header class="header">
         <a href="#">
-            <img class="logo" alt="Academic Funding Gateway logo" src="{{ asset('img/academic-funding-logo.png') }}" />
+            <img class="logo" alt="Academic Funding Gateway logo" src="{{ asset('assets/img/logo-dark-transparent.png') }}" />
         </a>
         <nav class="main-nav">
             <ul class="main-nav-list">
@@ -549,7 +646,7 @@
                 <li><a class="main-nav-link nav-cta" href="{{ route('student.register') }}">Complete Registration</a></li>
             </ul>
         </nav>
-        <button class="btn-mobile-nav">
+        <button class="btn-mobile-nav" aria-expanded="false">
             <ion-icon class="icon-mobile-nav" name="menu-outline"></ion-icon>
             <ion-icon class="icon-mobile-nav" name="close-outline"></ion-icon>
         </button>
@@ -559,30 +656,23 @@
             <div class="hero-overlay"></div>
             <div class="hero">
                 <div class="hero-text-box">
-                    <h1 class="heading-primary">From Student to CEO – Empowering the Next Generation of Leaders</h1>
+                    <h1 class="heading-primary" style="color: #ffffff;">From Student to CEO – Empowering the Next Generation of Leaders</h1>
                     <p class="hero-description">
                         We provide Nigerian students with grants, training, mentorship, and resources to transition from the classroom to the boardroom.
                     </p>
                     <a href="{{ route('student.register') }}" class="btn btn--full margin-right-sm">Complete Registration</a>
                     <a href="#about" class="btn btn--outline">Learn More &darr;</a>
                 </div>
-                <div class="hero-img-box">
-                    <picture>
-                        <source srcset="{{ asset('img/hero.webp') }}" type="image/webp" />
-                        <source srcset="{{ asset('img/hero-student.png') }}" type="image/png" />
-                        <img src="{{ asset('img/hero-student.png') }}" class="hero-img" alt="Students collaborating on business ideas" />
-                    </picture>
-                </div>
             </div>
         </section>
         <section class="section-featured">
             <div class="container">
-                <h2 class="heading-featured-in">As featured in</h2>
+                <h2 class="heading-featured-in"></h2>
                 <div class="logos">
-                    <img src="{{ asset('img/logos/university-logo.png') }}" alt="University logo" />
+                    <!-- <img src="{{ asset('img/logos/university-logo.png') }}" alt="University logo" />
                     <img src="{{ asset('img/logos/business-insider.png') }}" alt="Business Insider logo" />
                     <img src="{{ asset('img/logos/techcrunch.png') }}" alt="Techcrunch logo" />
-                    <img src="{{ asset('img/logos/forbes.png') }}" alt="Forbes logo" />
+                    <img src="{{ asset('img/logos/forbes.png') }}" alt="Forbes logo" /> -->
                 </div>
             </div>
         </section>
@@ -598,7 +688,7 @@
                     </p>
                 </div>
                 <div class="step-img-box">
-                    <img src="{{ asset('img/students-collaborating.jpg') }}" class="step-img" alt="Students working on business ideas" />
+                    <img src="{{ asset('assets/img/students_working_business_idea.jpg') }}" class="step-img" alt="Students working on business ideas" />
                 </div>
             </div>
         </section>
@@ -616,10 +706,10 @@
                     </p>
                 </div>
                 <div class="step-img-box">
-                    <img src="{{ asset('img/app/offline-application.png') }}" class="step-img" alt="Offline application process" />
+                    <img src="{{ asset('assets/img/registration.jpg') }}" class="step-img" alt="Offline application process" />
                 </div>
                 <div class="step-img-box">
-                    <img src="{{ asset('img/app/complete-registration.png') }}" class="step-img" alt="Online registration completion screen" />
+                    <img src="{{ asset('assets/img/online_screen.jpg') }}" class="step-img" alt="Online registration completion screen" />
                 </div>
                 <div class="step-text-box">
                     <p class="step-number">02</p>
@@ -636,10 +726,10 @@
                     </p>
                 </div>
                 <div class="step-img-box">
-                    <img src="{{ asset('img/app/grants-screen.png') }}" class="step-img" alt="Grants access screen" />
+                    <img src="{{ asset('assets/img/girl.jpg') }}" class="step-img" alt="Grants access screen" />
                 </div>
                 <div class="step-img-box">
-                    <img src="{{ asset('img/app/mentorship-screen.png') }}" class="step-img" alt="Mentorship program screen" />
+                    <img src="{{ asset('assets/img/mentorship_1.jpg') }}" class="step-img" alt="Mentorship program screen" />
                 </div>
                 <div class="step-text-box">
                     <p class="step-number">04</p>
@@ -712,9 +802,10 @@
                             Have questions about our Student-to-CEO Initiative or the registration process? Our team is here to guide you every step of the way. Reach out to our admin for personalized support and start building your future as a business leader.
                         </p>
                         <a href="mailto:info@academicfunding.org" class="btn btn--full">Contact Us for Registration Info</a>
-                       
                     </div>
-                    <div class="cta-img-box" role="img" aria-label="Students collaborating"></div>
+                    <div class="cta-img-box" role="img" aria-label="Students collaborating">
+                        <img src="{{ asset('assets/img/cta.jpg') }}" alt="" style="height: 100%" />
+                    </div>
                 </div>
             </div>
         </section>
@@ -723,13 +814,13 @@
         <div class="container">
             <div class="logo-col">
                 <a href="#" class="footer-logo">
-                    <img class="logo" alt="Academic Funding Gateway logo" src="{{ asset('img/academic-funding-logo.png') }}" />
+                    <img class="logo" alt="Academic Funding Gateway logo" src="{{ asset('assets/img/logo-light-transparent.png') }}" />
                 </a>
                 <address class="contacts">
                     <p class="address">NO 3 TAURA CLOSE 2/2 KUBWA, ABUJA, FCT</p>
                     <p>
-                        <a class="footer-link" href="tel:08030634841">08030634841</a><br />
-                        <a class="footer-link" href="mailto:victoruadaji1@gmail.com">victoruadaji1@gmail.com</a>
+                        <a class="footer-link" href="tel:08030634841">091134448135</a><br />
+                        <a class="footer-link" href="mailto:victoruadaji1@gmail.com">info@academicfunding.org</a>
                     </p>
                 </address>
                 <p class="copyright">
@@ -738,5 +829,13 @@
             </div>
         </div>
     </footer>
+    <script>
+        document.querySelector('.btn-mobile-nav').addEventListener('click', function () {
+            const nav = document.querySelector('.main-nav');
+            const isExpanded = this.getAttribute('aria-expanded') === 'true';
+            this.setAttribute('aria-expanded', !isExpanded);
+            nav.classList.toggle('active');
+        });
+    </script>
 </body>
 </html>
