@@ -5,7 +5,7 @@
 @section('content')
 
 @if($deadline)
-    <div class="card text-center text-white bg-warning mb-3">
+    <div class="card text-center text-white bg-dark mb-3">
         <div class="card-body">
             <h5 class="card-title"><i class="bi bi-clock me-2"></i> Application Deadline</h5>
             <p class="card-text fs-4">{{ $deadline->format('F d, Y \a\t h:i A') }}</p>

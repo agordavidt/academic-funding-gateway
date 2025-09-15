@@ -30,7 +30,7 @@ class RegistrationController extends Controller
         $user = User::where('phone_number', $cleanPhoneNumber)->first();
 
         if (!$user) {
-            return back()->withErrors(['phone_number' => 'Phone number not found in our records.']);
+            return back()->withErrors(['phone_number' => 'You are not among the qualified candidates']);
         }
 
         if ($user->registration_stage === 'completed') {

@@ -136,7 +136,7 @@
                                             data-bs-target="#smsModal" data-user-id="{{ $user->id }}" 
                                             data-user-name="{{ $user->full_name }}" 
                                             data-user-phone="{{ $user->phone_number }}" title="Send SMS">
-                                        <i class="fas fa-sms"></i>
+                                        <i class="fas fa-comment-dots"></i>
                                     </button>
                                     <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" 
                                             data-bs-target="#deleteModal" data-user-id="{{ $user->id }}" 
@@ -157,7 +157,7 @@
         
         @if($users->hasPages())
             <div class="card-footer">
-                {{ $users->appends(request()->query())->links() }}
+                {{ $users->appends(request()->query())->links('vendor.pagination.bootstrap-4-clean') }}
             </div>
         @endif
     </div>
