@@ -1,3 +1,220 @@
+--- Services/NotificationService.php
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+use App\Models\Payment;
+use App\Models\Notification;
+use App\Notifications\SmsNotification;
+use App\Notifications\PaymentApprovedSmsNotification; 
+use App\Notifications\PaymentRejectedSmsNotification;
+use App\Notifications\ApplicationStatusSmsNotification;
+use App\Notifications\TrainingAssignmentSmsNotification;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
+
+class NotificationService
+{
+    protected $smsService;
+
+    public function __construct(SmsService $smsService)
+    {
+        $this->smsService = $smsService;
+    }
+
+    /**
+     * Send payment submission confirmation
+     */
+    public function sendPaymentSubmittedConfirmation(User $user, Payment $payment)
+    {
+        $subject = 'Payment Evidence Submitted - Academic Funding Gateway';
+        $message = "Dear {$user->first_name}, your payment evidence has been submitted successfully. " .
+                  "Transaction ID: {$payment->transaction_id}. We will verify your payment within 24 hours.";
+
+        $this->sendNotification($user, 'payment_submitted', $subject, $message);
+    }
+
+    /**
+     * Send payment approved notification
+     */
+     /**
+     * Send payment approved notification
+     */
+    public function sendPaymentApproved(User $user, Payment $payment)
+    {
+        // ... (email and database logic) ...
+        
+        // Use the specialized notification class directly
+        if ($user->phone_number) {
+            try {
+                $user->notify(new PaymentApprovedSmsNotification($user, $payment)); // Corrected line
+                Log::info('Payment approved SMS sent', ['user_id' => $user->id]);
+            } catch (\Exception $e) {
+                // ... (error logging) ...
+            }
+        }
+        $this->storeNotification($user, 'payment_approved', $subject, $message);
+    }
+    
+    // Similarly, fix other methods to use the specialized classes
+    public function sendPaymentRejected(User $user, Payment $payment, $reason)
+    {
+        // ...
+        if ($user->phone_number) {
+            try {
+                $user->notify(new PaymentRejectedSmsNotification($user, $payment, $reason)); // Corrected line
+                Log::info('Payment rejected SMS sent', ['user_id' => $user->id]);
+            } catch (\Exception $e) {
+                // ...
+            }
+        }
+        $this->storeNotification($user, 'payment_rejected', $subject, $message);
+    }
+
+    public function sendApplicationStatusUpdate(User $user, $status)
+    {
+        // ...
+        if ($user->phone_number) {
+            try {
+                $user->notify(new ApplicationStatusSmsNotification($user, $status));
+                Log::info('Application status SMS sent', ['user_id' => $user->id, 'status' => $status]);
+            } catch (\Exception $e) {
+                // ...
+            }
+        }
+        $this->storeNotification($user, 'application_status', $subject, $message);
+    }
+    
+    public function sendTrainingAssignment(User $user, $trainingInstitution)
+    {
+        // ...
+        if ($user->phone_number) {
+            try {
+                $user->notify(new TrainingAssignmentSmsNotification($user, $trainingInstitution));
+                Log::info('Training assignment SMS sent', ['user_id' => $user->id]);
+            } catch (\Exception $e) {
+                // ...
+            }
+        }
+        $this->storeNotification($user, 'training_assignment', $subject, $message);
+    }
+
+    /**
+     * Send custom SMS to user (for admin use)
+     */
+    public function sendCustomSms(User $user, $message, $from = null)
+    {
+        if (!$user->phone_number) {
+            return ['success' => false, 'message' => 'User does not have a phone number'];
+        }
+
+        try {
+            // Use the generic SmsNotification class
+            $user->notify(new SmsNotification($message, $from));
+            
+            // ... (log and store logic) ...
+        } catch (\Exception $e) {
+            // ... (error handling) ...
+        }
+    }
+
+    /**
+     * Send bulk SMS to multiple users
+     */
+    public function sendBulkSms(array $users, $message, $from = null)
+    {
+        // Filter users with phone numbers
+        $usersWithPhone = collect($users)->filter(fn($user) => !empty($user->phone_number));
+
+        if ($usersWithPhone->isEmpty()) {
+            return ['success' => false, 'message' => 'No users with valid phone numbers found', 'total' => 0];
+        }
+
+        try {
+            // Laravel's Notification::send can handle collections of notifiables
+            Notification::send($usersWithPhone, new SmsNotification($message, $from));
+            
+            // ... (log and store logic) ...
+        } catch (\Exception $e) {
+            // ... (error handling) ...
+        }
+    }
+    /**
+     * Send email notification
+     */
+    protected function sendEmail(User $user, $subject, $message)
+    {
+        if (!$user->email) {
+            return;
+        }
+
+        try {
+            Mail::raw($message, function ($mail) use ($user, $subject) {
+                $mail->to($user->email)
+                     ->subject($subject);
+            });
+
+            Log::info('Email sent successfully', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'subject' => $subject
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to send email', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Store notification in database for record keeping
+     */
+    protected function storeNotification(User $user, $type, $subject, $message)
+    {
+        try {
+            Notification::create([
+                'user_id' => $user->id,
+                'type' => $type,
+                'subject' => $subject,
+                'message_body' => $message,
+                'status' => 'sent',
+                'sent_at' => now()
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to store notification', [
+                'user_id' => $user->id,
+                'type' => $type,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Legacy method for backward compatibility
+     * @deprecated Use specific methods instead
+     */
+    protected function sendNotification(User $user, $type, $subject, $message)
+    {
+        // Send email
+        $this->sendEmail($user, $subject, $message);
+        
+        // Send SMS using generic notification
+        if ($user->phone_number) {
+            $user->notify(new SmsNotification($message));
+        }
+
+        // Store notification record
+        $this->storeNotification($user, $type, $subject, $message);
+    }
+}
+
+
+
+
+-- Usercontroller
 <?php
 
 namespace App\Http\Controllers\Admin;
@@ -256,7 +473,7 @@ class UserController extends Controller
     }
 }
 
-  public function sendSms(Request $request, User $user)
+    public function sendSms(Request $request, User $user)
     {
         $request->validate([
             'message' => 'required|string|max:160'
@@ -266,61 +483,92 @@ class UserController extends Controller
             return back()->with('error', 'User does not have a valid phone number.');
         }
 
-        // The try...catch block is simplified since the NotificationService will handle internal exceptions.
-        $result = $this->notificationService->sendCustomSms($user, $request->message);
+        try {
+            $result = $this->notificationService->sendCustomSms($user, $request->message);
 
-        if ($result['success']) {
-            return back()->with('success', 'SMS sent successfully to ' . $user->phone_number);
-        } else {
-            return back()->with('error', 'Failed to send SMS: ' . $result['message']);
+            if ($result['success']) {
+                return back()->with('success', 'SMS sent successfully to ' . $user->phone_number);
+            } else {
+                return back()->with('error', 'Failed to send SMS: ' . $result['message']);
+            }
+        } catch (Exception $e) {
+            Log::error('Failed to send custom SMS: ' . $e->getMessage(), [
+                'user_id' => $user->id,
+                'phone' => $user->phone_number
+            ]);
+            return back()->with('error', 'Failed to send SMS. Please check the logs.');
         }
     }
 
-
     public function bulkSms(Request $request)
-        {
-            $request->validate([
-                'message' => 'required|string|max:160',
-                'recipients' => 'required|in:all,paid,pending,accepted,rejected,with_phone',
-                'school_filter' => 'nullable|string'
-            ]);
+    {
+        $request->validate([
+            'message' => 'required|string|max:160',
+            'recipients' => 'required|in:all,paid,pending,accepted,rejected,with_phone',
+            'school_filter' => 'nullable|string'
+        ]);
 
-            $query = User::query();
+        $query = User::query();
 
-            // ... (existing switch statement)
+        switch ($request->recipients) {
+            case 'paid':
+                $query->where('payment_status', 'paid');
+                break;
+            case 'pending':
+                $query->where('payment_status', 'pending');
+                break;
+            case 'accepted':
+                $query->where('application_status', 'accepted');
+                break;
+            case 'rejected':
+                $query->where('application_status', 'rejected');
+                break;
+            case 'with_phone':
+                $query->whereNotNull('phone_number')->where('phone_number', '!=', '');
+                break;
+            case 'all':
+                break;
+        }
 
-            if ($request->filled('school_filter')) {
-                $query->where('school', 'like', "%{$request->school_filter}%");
-            }
+        if ($request->filled('school_filter')) {
+            $query->where('school', 'like', "%{$request->school_filter}%");
+        }
 
-            // Filter to users with valid phone numbers for SMS
-            $users = $query->get()->filter(function ($user) {
-                return $user->hasValidPhoneNumber();
-            });
+        // Filter to users with valid phone numbers for SMS
+        $users = $query->get()->filter(function ($user) {
+            return $user->hasValidPhoneNumber();
+        });
 
-            if ($users->isEmpty()) {
-                return back()->with('error', 'No users match the selected criteria or have valid phone numbers.');
-            }
+        if ($users->count() === 0) {
+            return back()->with('error', 'No users match the selected criteria or have valid phone numbers.');
+        }
 
-            // The try...catch block is removed because the service handles the exceptions
+        try {
             $result = $this->notificationService->sendBulkSms($users->toArray(), $request->message);
 
             if ($result['success']) {
-                $message = "Bulk SMS sent successfully to {$result['total']} users.";
+                $message = "Bulk SMS sent successfully to {$users->count()} users.";
             } else {
                 $message = "Bulk SMS failed: {$result['message']}";
             }
 
             return back()->with($result['success'] ? 'success' : 'error', $message);
-        }
-
-        public function getSmsBalance()
-        {
-            return response()->json([
-                'balance' => 'N/A',
-                'currency' => 'Credits'
+        } catch (Exception $e) {
+            Log::error('Failed to send bulk SMS: ' . $e->getMessage(), [
+                'recipients' => $request->recipients,
+                'school_filter' => $request->school_filter
             ]);
+            return back()->with('error', 'Failed to send bulk SMS. Please check the logs.');
         }
+    }
+
+    public function getSmsBalance()
+    {
+        return response()->json([
+            'balance' => 'N/A',
+            'currency' => 'Credits'
+        ]);
+    }
 
     public function smsSettings()
     {
