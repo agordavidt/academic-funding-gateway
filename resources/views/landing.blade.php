@@ -819,7 +819,7 @@
                 <address class="contacts">
                     <p class="address">NO 3 TAURA CLOSE 2/2 KUBWA, ABUJA, FCT</p>
                     <p>
-                        <a class="footer-link" href="tel:08030634841">091134448135</a><br />
+                        <a class="footer-link" href="tel:08030634841">09134448135</a><br />
                         <a class="footer-link" href="mailto:victoruadaji1@gmail.com">info@academicfunding.org</a>
                     </p>
                 </address>
