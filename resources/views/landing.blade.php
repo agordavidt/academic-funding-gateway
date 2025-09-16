@@ -635,14 +635,13 @@
 </head>
 <body>
     <header class="header">
-        <a href="#">
+        <a href="{{ route('landing') }}">
             <img class="logo" alt="Academic Funding Gateway logo" src="{{ asset('assets/img/logo-dark-transparent.png') }}" />
         </a>
         <nav class="main-nav">
             <ul class="main-nav-list">
                 <li><a class="main-nav-link" href="#about">About Us</a></li>
-                <li><a class="main-nav-link" href="#how">How It Works</a></li>
-                <li><a class="main-nav-link" href="#offers">What We Offer</a></li>
+                <li><a class="main-nav-link" href="{{ route('donation') }}">Parner with us</a></li>           
                 <li><a class="main-nav-link nav-cta" href="{{ route('student.register') }}">Complete Registration</a></li>
             </ul>
         </nav>

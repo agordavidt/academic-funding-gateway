@@ -14,6 +14,10 @@ Route::get('/', function () {
     return view('landing');
 })->name('landing');
 
+
+
+Route::get('donation', function() { return view('donation');})->name('donation');
+
 // Admin Authentication Routes
 Route::prefix('admin')->name('admin.')->group(function () {
     Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
