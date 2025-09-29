@@ -278,50 +278,91 @@ class UserController extends Controller
 
 
     public function bulkSms(Request $request)
-        {
-            $request->validate([
-                'message' => 'required|string|max:160',
-                'recipients' => 'required|in:all,paid,pending,accepted,rejected,with_phone',
-                'school_filter' => 'nullable|string'
-            ]);
+    {
+        $request->validate([
+            'message' => 'required|string|max:160',
+            'recipients' => 'required|in:all,paid,pending,accepted,rejected,with_phone',
+            'school_filter' => 'nullable|string'
+        ]);
 
-            $query = User::query();
+        $query = User::query();
 
-            // ... (existing switch statement)
-
-            if ($request->filled('school_filter')) {
-                $query->where('school', 'like', "%{$request->school_filter}%");
-            }
-
-            // Filter to users with valid phone numbers for SMS
-            $users = $query->get()->filter(function ($user) {
-                return $user->hasValidPhoneNumber();
-            });
-
-            if ($users->isEmpty()) {
-                return back()->with('error', 'No users match the selected criteria or have valid phone numbers.');
-            }
-
-            // The try...catch block is removed because the service handles the exceptions
-            $result = $this->notificationService->sendBulkSms($users->toArray(), $request->message);
-
-            if ($result['success']) {
-                $message = "Bulk SMS sent successfully to {$result['total']} users.";
-            } else {
-                $message = "Bulk SMS failed: {$result['message']}";
-            }
-
-            return back()->with($result['success'] ? 'success' : 'error', $message);
+        // Apply recipient filters (ensure this logic is complete and correct in your file)
+        switch ($request->recipients) {
+            case 'paid':
+                $query->where('payment_status', 'paid');
+                break;
+            case 'pending':
+                $query->where('payment_status', 'pending');
+                break;
+            case 'accepted':
+                $query->where('application_status', 'accepted');
+                break;
+            case 'rejected':
+                $query->where('application_status', 'rejected');
+                break;
+            case 'with_phone':
+                // Use the scope to filter down to users with a phone number set
+                $query->withValidPhone(); 
+                break;
+            case 'all':
+            default:
+                // For 'all' we still need to filter for valid numbers to prevent early errors
+                $query->withValidPhone();
+                break;
         }
 
-        public function getSmsBalance()
-        {
-            return response()->json([
-                'balance' => 'N/A',
-                'currency' => 'Credits'
-            ]);
+        if ($request->filled('school_filter')) {
+            $query->where('school', 'like', "%{$request->school_filter}%");
         }
 
+        // Retrieve the users. We need the models so the Notification Service can call notify() on them.
+        // NOTE: The model-based filtering for hasValidPhoneNumber() is now done implicitly by
+        // the NotificationService loop, but to prevent querying massive datasets, 
+        // it's better to use the scope below if you didn't in the switch.
+        
+        // Ensure all users fetched have at least a non-empty phone number field.
+        if ($request->recipients !== 'with_phone' && $request->recipients !== 'all') {
+            // Apply the generic phone filter if not already applied
+            $query->withValidPhone();
+        }
+        
+        // Retrieve users as Eloquent Collections/Models
+        $users = $query->get();
+
+        // Secondary Model-based Validation (if your scope isn't strict enough)
+        // Filter to users with *valid* phone numbers for SMS (using the model method)
+        // This is optional if your withValidPhone scope is strict, but ensures cleaner data
+        $users = $users->filter(fn ($user) => $user->hasValidPhoneNumber());
+
+
+        $totalAttempted = $users->count();
+        
+        if ($totalAttempted === 0) {
+            return back()->with('error', 'No users match the selected criteria or have valid phone numbers.');
+        }
+
+        // Call the service which now handles individual sending and counting
+        // Pass the collection of valid User models
+        $result = $this->notificationService->sendBulkSms($users->all(), $request->message); 
+        // Result structure: ['success', 'message', 'sent_count', 'failed_count', 'total']
+
+        $sent = $result['sent_count'] ?? 0;
+        $failed = $result['failed_count'] ?? 0;
+
+        if ($sent > 0 && $failed === 0) {
+            $message = "✅ Bulk SMS sent successfully to **{$sent}** users.";
+            $type = 'success';
+        } elseif ($sent > 0 && $failed > 0) {
+            $message = "⚠️ Bulk SMS completed with partial success. **Sent: {$sent}**. **Failed: {$failed}**.";
+            $type = 'warning';
+        } else {
+            $message = "❌ Bulk SMS failed completely. **{$failed}** failures out of {$totalAttempted} valid recipients. Check logs for details.";
+            $type = 'error';
+        }
+
+        return back()->with($type, $message);
+    }
     public function smsSettings()
     {
         $balance = ['balance' => 'N/A', 'currency' => 'Credits'];

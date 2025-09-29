@@ -87,7 +87,6 @@ class User extends Authenticatable
         if (!$this->phone_number) {
             return false;
         }
-
         // Nigerian phone numbers start with 0 and have 11 digits
         return preg_match('/^0[789][0-9]{9}$/', $this->phone_number);
     }
@@ -110,9 +109,14 @@ class User extends Authenticatable
      */
     public function scopeWithValidPhone($query)
     {
+        // This regex implements the same logic as hasValidPhoneNumber() but on the database side
+        // It filters for non-null/empty and 11-digit numbers starting with 07, 08, or 09.
         return $query->whereNotNull('phone_number')
-                    ->where('phone_number', '!=', '');
+                    ->where('phone_number', '!=', '')
+                    ->whereRaw('LENGTH(phone_number) = 11')
+                    ->where('phone_number', 'REGEXP', '^0[789][0-9]{9}$');
     }
+    
 
     public function scopeWithPaymentStatus($query, $status)
     {

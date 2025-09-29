@@ -126,29 +126,85 @@ class NotificationService
     }
 
     /**
-     * Send bulk SMS to multiple users
+     * Send bulk SMS to multiple users, attempting each send individually.
+     *
+     * @param array $users Array of App\Models\User objects or arrays representing users.
+     * @param string $message The SMS message content.
+     * @param string|null $from The sender ID.
+     * @return array
      */
     public function sendBulkSms(array $users, $message, $from = null)
     {
-        // Filter users with phone numbers
-        $usersWithPhone = collect($users)->filter(fn($user) => !empty($user->phone_number));
+        // Ensure we are working with User models/objects if they came from Eloquent, 
+        // or cast to a collection for consistent filtering.
+        $usersCollection = collect($users);
+        
+        // Filter users with phone numbers (This step should be done in the controller, 
+        // but we keep it here as a final safeguard)
+        $usersToNotify = $usersCollection->filter(fn($user) => !empty($user['phone_number'] ?? $user->phone_number));
 
-        if ($usersWithPhone->isEmpty()) {
-            return ['success' => false, 'message' => 'No users with valid phone numbers found', 'total' => 0];
+        $totalAttempted = $usersToNotify->count();
+        $sentCount = 0;
+        $failedCount = 0;
+        $failedDetails = [];
+
+        if ($totalAttempted === 0) {
+            return ['success' => false, 'message' => 'No users with phone numbers were found for bulk send.', 'sent_count' => 0, 'failed_count' => 0, 'total' => 0];
+        }
+        
+        // Iterate through each user and send the notification individually
+        foreach ($usersToNotify as $user) {
+            $phoneNumber = $user->phone_number ?? ($user['phone_number'] ?? 'N/A');
+            
+            try {
+                // Check if the item in $users is an Eloquent Model instance or a simple array
+                $recipient = $user instanceof \App\Models\User ? $user : new User((array) $user);
+                
+                // Send the notification using Laravel's Notification System
+                $recipient->notify(new SmsNotification($message, $from));
+                
+                $sentCount++;
+            } catch (\Exception $e) {
+                // CATCH THE ERROR HERE and continue the loop, preventing a stop
+                $failedCount++;
+                $failedDetails[] = [
+                    'phone' => $phoneNumber,
+                    'reason' => 'Failed to send: ' . $e->getMessage()
+                ];
+                
+                // Log the individual failure for debugging
+                Log::warning("Bulk SMS failed for phone: {$phoneNumber}. Error: " . $e->getMessage());
+            }
         }
 
-        try {
-            FacadesNotification::send($usersWithPhone, new SmsNotification($message, $from));
-
-            $this->storeNotification(null, 'bulk_sms', 'Bulk SMS sent', "Sent a bulk SMS to {$usersWithPhone->count()} users.");
-
-            return ['success' => true, 'message' => "Bulk SMS sent to {$usersWithPhone->count()} users.", 'total' => $usersWithPhone->count()];
-        } catch (\Exception $e) {
-            Log::error('Failed to send bulk SMS notification: ' . $e->getMessage());
-            $this->storeNotification(null, 'bulk_sms_failed', 'Bulk SMS failed', $e->getMessage());
-
-            return ['success' => false, 'message' => 'Failed to send bulk SMS notification.', 'total' => 0];
+        // Determine the overall result message
+        if ($sentCount > 0 && $failedCount === 0) {
+            $resultMessage = "Bulk SMS sent successfully to {$sentCount} users.";
+            $overallSuccess = true;
+        } elseif ($sentCount > 0 && $failedCount > 0) {
+            $resultMessage = "Bulk SMS completed with partial success. Sent: {$sentCount}, Failed: {$failedCount}.";
+            $overallSuccess = true; // Still consider it successful as some were sent
+        } else {
+            $resultMessage = "Bulk SMS failed completely. Total failures: {$failedCount} out of {$totalAttempted} attempts.";
+            $overallSuccess = false;
         }
+        
+        // Store the overall notification record
+        $this->storeNotification(
+            null, 
+            $overallSuccess ? 'bulk_sms' : 'bulk_sms_failed', 
+            'Bulk SMS report', 
+            $resultMessage . ($failedCount > 0 ? ' Details: ' . json_encode($failedDetails) : '')
+        );
+
+        // Return the structured count
+        return [
+            'success' => $overallSuccess,
+            'message' => $resultMessage,
+            'sent_count' => $sentCount,
+            'failed_count' => $failedCount,
+            'total' => $totalAttempted
+        ];
     }
 
     /**
