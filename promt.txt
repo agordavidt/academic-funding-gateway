@@ -1,0 +1,1224 @@
+--- migration
+Schema::create('users', function (Blueprint $table) {
+            $table->id();
+            $table->string('phone_number')->unique();
+            $table->string('email')->unique()->nullable();
+            $table->string('first_name');
+            $table->string('last_name');           
+            $table->string('school')->nullable();          
+            $table->enum('registration_stage', ['imported', 'profile_completion', 'payment', 'completed'])->default('imported');
+            $table->enum('payment_status', ['pending', 'paid'])->default('pending');
+            $table->enum('application_status', ['pending', 'reviewing', 'accepted', 'rejected'])->default('pending');
+            $table->timestamp('email_verified_at')->nullable();
+            $table->string('password')->nullable();
+            $table->rememberToken();
+            $table->timestamps();
+        });
+
+
+-- models
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
+
+class User extends Authenticatable
+{
+    use HasApiTokens, HasFactory, Notifiable;
+
+    protected $fillable = [
+        'first_name',
+        'last_name',
+        'email',
+        'phone_number',
+        'school',
+        'registration_stage',
+        'payment_status',
+        'application_status',
+        'email_verified_at',
+        'password',
+    ];
+
+    protected $hidden = [
+        'password',
+        'remember_token',
+    ];
+
+    protected $casts = [
+        'email_verified_at' => 'datetime',
+        'password' => 'hashed',
+    ];
+
+    /**
+     * Mutator to clean and format the phone number before saving.
+     * Handles Nigerian phone numbers starting with 0
+     *
+     * @param  string  $value
+     * @return void
+     */
+    public function setPhoneNumberAttribute($value)
+    {
+        $this->attributes['phone_number'] = self::cleanPhoneNumberStatic($value);
+    }
+
+    /**
+     * Static method to clean and format Nigerian phone numbers.
+     * All numbers should start with 0 (Nigerian format)
+     *
+     * @param string $phoneNumber
+     * @return string
+     */
+    public static function cleanPhoneNumberStatic($phoneNumber)
+    {
+        // Remove all non-numeric characters
+        $phone = preg_replace('/[^0-9]/', '', $phoneNumber);
+
+        // If it starts with +234, convert to 0 format
+        if (substr($phone, 0, 3) === '234') {
+            return '0' . substr($phone, 3);
+        }
+
+        // If it doesn't start with 0, add it (assuming it's a valid Nigerian number)
+        if (substr($phone, 0, 1) !== '0' && strlen($phone) === 10) {
+            return '0' . $phone;
+        }
+
+        return $phone;
+    }
+
+    /**
+     * Get the user's full name
+     */
+    public function getFullNameAttribute()
+    {
+        return $this->first_name . ' ' . $this->last_name;
+    }
+
+    /**
+     * Check if user has a valid Nigerian phone number
+     */
+    public function hasValidPhoneNumber()
+    {
+        if (!$this->phone_number) {
+            return false;
+        }
+        // Nigerian phone numbers start with 0 and have 11 digits
+        return preg_match('/^0[789][0-9]{9}$/', $this->phone_number);
+    }
+
+    /**
+     * Relationships
+     */
+    public function payments()
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    public function notifications()
+    {
+        return $this->hasMany(Notification::class);
+    }
+
+    /**
+     * Scopes
+     */
+    public function scopeWithValidPhone($query)
+    {
+        // This regex implements the same logic as hasValidPhoneNumber() but on the database side
+        // It filters for non-null/empty and 11-digit numbers starting with 07, 08, or 09.
+        return $query->whereNotNull('phone_number')
+                    ->where('phone_number', '!=', '')
+                    ->whereRaw('LENGTH(phone_number) = 11')
+                    ->where('phone_number', 'REGEXP', '^0[789][0-9]{9}$');
+    }
+    
+
+    public function scopeWithPaymentStatus($query, $status)
+    {
+        return $query->where('payment_status', $status);
+    }
+
+    public function scopeWithApplicationStatus($query, $status)
+    {
+        return $query->where('application_status', $status);
+    }
+}
+
+
+
+<?php
+
+namespace App\Http\Controllers\Admin;
+
+use App\Http\Controllers\Controller;
+use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+
+class DataImportController extends Controller
+{
+    /**
+     * Show the form for importing or creating student data.
+     */
+    public function index()
+    {
+        return view('admin.import.index');
+    }
+
+    /**
+     * Handle the manual creation of a single student record.
+     */
+    public function create(Request $request)
+    {
+        $request->validate([
+            'phone_number' => 'required|string|unique:users,phone_number',
+            'first_name' => 'required|string|max:255',
+            'last_name' => 'required|string|max:255',
+            'email' => 'nullable|email|unique:users,email',
+            'school' => 'nullable|string|max:255',
+        ]);
+
+        try {
+            User::create([
+                'phone_number' => $request->phone_number, // Will be cleaned by mutator
+                'first_name' => $request->first_name,
+                'last_name' => $request->last_name,
+                'email' => $request->email,
+                'school' => $request->school,
+                'password' => Hash::make('password123'), // Default password
+                'registration_stage' => 'imported',
+                'payment_status' => 'pending',
+                'application_status' => 'pending',
+            ]);
+
+            return back()->with('success', 'Student record created successfully!');
+        } catch (\Exception $e) {
+            Log::error('Failed to create student record: ' . $e->getMessage());
+            return back()->with('error', 'Failed to create student record: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Handle the file upload and import process for student data.
+     */
+    public function upload(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:csv,txt,xlsx,xls|max:5120',
+        ]);
+
+        $file = $request->file('file');
+        $extension = $file->getClientOriginalExtension();
+        
+        $imported = 0;
+        $errors = [];
+        $data = [];
+
+        try {
+            // Handle Excel files
+            if (in_array($extension, ['xlsx', 'xls'])) {
+                $spreadsheet = IOFactory::load($file->getRealPath());
+                $worksheet = $spreadsheet->getActiveSheet();
+                $rows = $worksheet->toArray();
+                
+                // Remove empty rows
+                $rows = array_filter($rows, function($row) {
+                    return !empty(array_filter($row));
+                });
+                
+                $header = array_shift($rows);
+                $data = $rows;
+            } else {
+                // Handle CSV files
+                $fileContent = file($file->getRealPath());
+                $data = array_map('str_getcsv', $fileContent);
+                $header = array_shift($data);
+            }
+
+            // Clean header names
+            $header = array_map(function($col) {
+                return trim(strtolower(str_replace(' ', '_', $col)));
+            }, $header);
+
+            // Process each row
+            foreach ($data as $rowIndex => $row) {
+                if (empty(array_filter($row))) {
+                    continue; // Skip empty rows
+                }
+
+                $studentData = array_combine($header, $row);
+                
+                // Check required fields
+                if (empty(trim($studentData['phone_number'] ?? '')) || 
+                    empty(trim($studentData['first_name'] ?? '')) || 
+                    empty(trim($studentData['last_name'] ?? ''))) {
+                    $errors[] = "Row " . ($rowIndex + 2) . ": Missing required fields (phone_number, first_name, last_name)";
+                    continue;
+                }
+
+                try {
+                    // Clean phone number using the model method
+                    $cleanPhoneNumber = User::cleanPhoneNumberStatic($studentData['phone_number']);
+                    
+                    // Check if user already exists
+                    $existingUser = User::where('phone_number', $cleanPhoneNumber)->first();
+                    if ($existingUser) {
+                        $errors[] = "Row " . ($rowIndex + 2) . ": Phone number {$cleanPhoneNumber} already exists";
+                        continue;
+                    }
+
+                    // Check email uniqueness if provided
+                    $email = !empty(trim($studentData['email'] ?? '')) ? trim($studentData['email']) : null;
+                    if ($email && User::where('email', $email)->exists()) {
+                        $errors[] = "Row " . ($rowIndex + 2) . ": Email {$email} already exists";
+                        continue;
+                    }
+                    
+                    // Create user record
+                    User::create([
+                        'phone_number' => $cleanPhoneNumber,
+                        'first_name' => trim($studentData['first_name']),
+                        'last_name' => trim($studentData['last_name']),
+                        'email' => $email,
+                        'school' => !empty(trim($studentData['school'] ?? '')) ? trim($studentData['school']) : null,
+                        'password' => Hash::make('password123'),
+                        'registration_stage' => 'imported',
+                        'payment_status' => 'pending',
+                        'application_status' => 'pending',
+                    ]);
+                    
+                    $imported++;
+                } catch (\Exception $e) {
+                    Log::error('Import error for row ' . ($rowIndex + 2) . ': ' . $e->getMessage());
+                    $errors[] = "Row " . ($rowIndex + 2) . ": " . $e->getMessage();
+                }
+            }
+        } catch (\Exception $e) {
+            Log::error('File processing error: ' . $e->getMessage());
+            return back()->with('error', "Failed to process file: " . $e->getMessage());
+        }
+
+        $message = "Successfully imported {$imported} students.";
+        if (count($errors) > 0) {
+            $message .= " " . count($errors) . " rows had errors.";
+        }
+
+        return back()->with([
+            'success' => $message,
+            'import_errors' => $errors
+        ]);
+    }
+
+    /**
+     * Download a sample CSV template for imports
+     */
+    public function downloadTemplate()
+    {
+        $filename = 'student_import_template.csv';
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ];
+
+        $columns = [
+            'phone_number',
+            'first_name', 
+            'last_name',
+            'email',
+            'school'
+        ];
+
+        $callback = function() use ($columns) {
+            $file = fopen('php://output', 'w');
+            
+            // Add header row
+            fputcsv($file, $columns);
+            
+            // Add sample data row
+            fputcsv($file, [
+                '08012345678',
+                'John',
+                'Doe', 
+                'john.doe@example.com',
+                'University of Lagos'
+            ]);
+            
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+}
+
+
+-- Controller
+<?php
+
+namespace App\Http\Controllers\Admin;
+
+use App\Http\Controllers\Controller;
+use App\Models\User;
+use App\Models\Payment;
+use App\Services\NotificationService;
+use App\Services\SmsService;
+use Illuminate\Support\Facades\DB; 
+use Illuminate\Support\Facades\Auth; 
+use Exception;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
+
+class UserController extends Controller
+{
+    protected $notificationService;
+    protected $smsService;
+
+    public function __construct(NotificationService $notificationService, SmsService $smsService)
+    {
+        $this->notificationService = $notificationService;
+        $this->smsService = $smsService;
+    }
+
+    public function index(Request $request)
+    {
+        $query = User::with(['payments']);
+
+        // Search functionality
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('first_name', 'like', "%{$search}%")
+                    ->orWhere('last_name', 'like', "%{$search}%")
+                    ->orWhere('phone_number', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
+        // Payment status filter
+        if ($request->filled('payment_status')) {
+            $query->where('payment_status', $request->payment_status);
+        }
+
+        // Application status filter
+        if ($request->filled('application_status')) {
+            $query->where('application_status', $request->application_status);
+        }
+
+        // School filter
+        if ($request->filled('school')) {
+            $query->where('school', 'like', "%{$request->school}%");
+        }
+
+        // Registration stage filter
+        if ($request->filled('registration_stage')) {
+            $query->where('registration_stage', $request->registration_stage);
+        }
+
+        $users = $query->orderBy('created_at', 'desc')->paginate(15);
+
+        // Get unique schools for filter dropdown
+        $schools = User::whereNotNull('school')
+                        ->where('school', '!=', '')
+                        ->distinct()
+                        ->pluck('school')
+                        ->sort()
+                        ->values();
+
+        return view('admin.users.index', compact('users', 'schools'));
+    }
+
+    public function show(User $user)
+    {
+        $user->load(['payments', 'notifications']);
+        
+        $smsBalance = ['balance' => 'N/A', 'currency' => 'Credits']; // Placeholder
+        
+        return view('admin.users.show', compact('user', 'smsBalance'));
+    }
+
+    public function edit(User $user)
+    {
+        return view('admin.users.edit', compact('user'));
+    }
+
+    public function update(Request $request, User $user)
+    {
+        $request->validate([
+            'first_name' => 'required|string|max:255',
+            'last_name' => 'required|string|max:255',
+            'email' => ['nullable', 'email', Rule::unique('users')->ignore($user->id)],
+            'phone_number' => ['required', 'string', Rule::unique('users')->ignore($user->id)],
+            'school' => 'nullable|string|max:255',
+            'registration_stage' => 'required|in:imported,profile_completion,payment,completed',
+            'payment_status' => 'required|in:pending,paid',
+            'application_status' => 'required|in:pending,reviewing,accepted,rejected',
+        ]);
+
+        try {
+            $user->update([
+                'first_name' => $request->first_name,
+                'last_name' => $request->last_name,
+                'email' => $request->email,
+                'phone_number' => $request->phone_number, // Will be cleaned by mutator
+                'school' => $request->school,
+                'registration_stage' => $request->registration_stage,
+                'payment_status' => $request->payment_status,
+                'application_status' => $request->application_status,
+            ]);
+
+            return redirect()->route('admin.users.show', $user)
+                           ->with('success', 'User updated successfully.');
+        } catch (\Exception $e) {
+            Log::error('Failed to update user: ' . $e->getMessage(), ['user_id' => $user->id]);
+            return back()->with('error', 'Failed to update user: ' . $e->getMessage())
+                        ->withInput();
+        }
+    }
+
+    public function destroy(User $user)
+    {
+        try {
+            // Delete related payments first
+            $user->payments()->delete();
+            
+            // Delete the user
+            $user->delete();
+
+            return redirect()->route('admin.users.index')
+                           ->with('success', 'User and related records deleted successfully.');
+        } catch (\Exception $e) {
+            Log::error('Failed to delete user: ' . $e->getMessage(), ['user_id' => $user->id]);
+            return back()->with('error', 'Failed to delete user: ' . $e->getMessage());
+        }
+    }
+
+    public function updateApplicationStatus(Request $request, User $user)
+    {
+        $request->validate([
+            'application_status' => 'required|in:pending,reviewing,accepted,rejected'
+        ]);
+
+        $oldStatus = $user->application_status;
+        $user->update(['application_status' => $request->application_status]);
+
+        if ($oldStatus !== $request->application_status) {
+            try {
+                $this->notificationService->sendApplicationStatusUpdate($user, $request->application_status);
+                return back()->with('success', 'Application status updated successfully. Notifications sent to user.');
+            } catch (Exception $e) {
+                Log::error('Failed to send application status update notification: ' . $e->getMessage(), [
+                    'user_id' => $user->id,
+                    'status' => $request->application_status
+                ]);
+                return back()->with('warning', 'Application status updated, but notification failed. Error: ' . $e->getMessage());
+            }
+        }
+        
+        return back()->with('success', 'Application status updated successfully.');
+    }
+
+ 
+
+    public function approvePayment(Request $request, User $user, Payment $payment)
+{
+    // Safety check to ensure an admin is authenticated
+    if (!Auth::guard('admin')->check()) {
+        return back()->with('error', 'Authentication error. Please log in again.');
+    }
+
+    // Check if the payment belongs to the user
+    if ($payment->user_id !== $user->id) {
+        return back()->with('error', 'Payment does not belong to this user.');
+    }
+
+    // Check if the payment is in the 'submitted' status
+    if ($payment->status !== 'submitted') {
+        return back()->with('error', 'Payment cannot be approved as its status is not "submitted".');
+    }
+
+    DB::beginTransaction();
+    try {
+        $approvalNote = $request->input('approval_note');
+        
+        // Get the authenticated user
+        $adminUser = Auth::guard('admin')->user();
+        
+        // Update the payment record
+        $payment->status = 'success';
+        $payment->gateway_response = [
+            'approved_by' => $adminUser->full_name,
+            'approved_at' => now(),
+            'approval_note' => $approvalNote,
+        ];
+        $payment->save();
+
+        // Update the user's payment status to 'paid'
+        $user->payment_status = 'paid';
+        $user->save();
+
+        DB::commit();
+
+        return back()->with('success', 'Payment approved successfully and user status updated to "paid".');
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return back()->with('error', 'Failed to approve payment: ' . $e->getMessage());
+    }
+}
+
+  public function rejectPayment(Request $request, User $user, Payment $payment)
+{
+    // Safety check to ensure an admin is authenticated
+    if (!Auth::guard('admin')->check()) {
+        return back()->with('error', 'Authentication error. Please log in again.');
+    }
+
+    $request->validate([
+        'rejection_reason' => 'required|string|max:255',
+    ]);
+
+    // Check if the payment belongs to the user
+    if ($payment->user_id !== $user->id) {
+        return back()->with('error', 'Payment does not belong to this user.');
+    }
+    
+    // Check if the payment is in the 'submitted' status
+    if ($payment->status !== 'submitted') {
+        return back()->with('error', 'Payment cannot be rejected as its status is not "submitted".');
+    }
+
+    DB::beginTransaction();
+    try {
+        $adminUser = Auth::guard('admin')->user();
+
+        // Update the payment record
+        $payment->status = 'rejected';
+        $payment->gateway_response = [
+            'rejected_by' => $adminUser->full_name,
+            'rejected_at' => now(),
+            'rejection_reason' => $request->input('rejection_reason'),
+        ];
+        $payment->save();
+
+        DB::commit();
+        return back()->with('success', 'Payment rejected successfully.');
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return back()->with('error', 'Failed to reject payment: ' . $e->getMessage());
+    }
+}
+
+  public function sendSms(Request $request, User $user)
+    {
+        $request->validate([
+            'message' => 'required|string|max:160'
+        ]);
+
+        if (!$user->hasValidPhoneNumber()) {
+            return back()->with('error', 'User does not have a valid phone number.');
+        }
+
+        // The try...catch block is simplified since the NotificationService will handle internal exceptions.
+        $result = $this->notificationService->sendCustomSms($user, $request->message);
+
+        if ($result['success']) {
+            return back()->with('success', 'SMS sent successfully to ' . $user->phone_number);
+        } else {
+            return back()->with('error', 'Failed to send SMS: ' . $result['message']);
+        }
+    }
+
+
+    public function bulkSms(Request $request)
+    {
+        $request->validate([
+            'message' => 'required|string|max:160',
+            'recipients' => 'required|in:all,paid,pending,accepted,rejected,with_phone',
+            'school_filter' => 'nullable|string'
+        ]);
+
+        $query = User::query();
+
+        // Apply recipient filters (ensure this logic is complete and correct in your file)
+        switch ($request->recipients) {
+            case 'paid':
+                $query->where('payment_status', 'paid');
+                break;
+            case 'pending':
+                $query->where('payment_status', 'pending');
+                break;
+            case 'accepted':
+                $query->where('application_status', 'accepted');
+                break;
+            case 'rejected':
+                $query->where('application_status', 'rejected');
+                break;
+            case 'with_phone':
+                // Use the scope to filter down to users with a phone number set
+                $query->withValidPhone(); 
+                break;
+            case 'all':
+            default:
+                // For 'all' we still need to filter for valid numbers to prevent early errors
+                $query->withValidPhone();
+                break;
+        }
+
+        if ($request->filled('school_filter')) {
+            $query->where('school', 'like', "%{$request->school_filter}%");
+        }
+
+        // Retrieve the users. We need the models so the Notification Service can call notify() on them.
+        // NOTE: The model-based filtering for hasValidPhoneNumber() is now done implicitly by
+        // the NotificationService loop, but to prevent querying massive datasets, 
+        // it's better to use the scope below if you didn't in the switch.
+        
+        // Ensure all users fetched have at least a non-empty phone number field.
+        if ($request->recipients !== 'with_phone' && $request->recipients !== 'all') {
+            // Apply the generic phone filter if not already applied
+            $query->withValidPhone();
+        }
+        
+        // Retrieve users as Eloquent Collections/Models
+        $users = $query->get();
+
+        // Secondary Model-based Validation (if your scope isn't strict enough)
+        // Filter to users with *valid* phone numbers for SMS (using the model method)
+        // This is optional if your withValidPhone scope is strict, but ensures cleaner data
+        $users = $users->filter(fn ($user) => $user->hasValidPhoneNumber());
+
+
+        $totalAttempted = $users->count();
+        
+        if ($totalAttempted === 0) {
+            return back()->with('error', 'No users match the selected criteria or have valid phone numbers.');
+        }
+
+        // Call the service which now handles individual sending and counting
+        // Pass the collection of valid User models
+        $result = $this->notificationService->sendBulkSms($users->all(), $request->message); 
+        // Result structure: ['success', 'message', 'sent_count', 'failed_count', 'total']
+
+        $sent = $result['sent_count'] ?? 0;
+        $failed = $result['failed_count'] ?? 0;
+
+        if ($sent > 0 && $failed === 0) {
+            $message = "✅ Bulk SMS sent successfully to **{$sent}** users.";
+            $type = 'success';
+        } elseif ($sent > 0 && $failed > 0) {
+            $message = "⚠️ Bulk SMS completed with partial success. **Sent: {$sent}**. **Failed: {$failed}**.";
+            $type = 'warning';
+        } else {
+            $message = "❌ Bulk SMS failed completely. **{$failed}** failures out of {$totalAttempted} valid recipients. Check logs for details.";
+            $type = 'error';
+        }
+
+        return back()->with($type, $message);
+    }
+    public function smsSettings()
+    {
+        $balance = ['balance' => 'N/A', 'currency' => 'Credits'];
+        $recentSms = \App\Models\Notification::where('type', 'LIKE', '%sms%')
+                                            ->with('user')
+                                            ->latest()
+                                            ->take(20)
+                                            ->get();
+
+        return view('admin.sms.settings', compact('balance', 'recentSms'));
+    }
+
+    public function testSms(Request $request)
+    {
+        $request->validate([
+            'phone_number' => 'required|string',
+            'message' => 'required|string|max:160'
+        ]);
+
+        try {
+            $result = $this->smsService->sendSms($request->phone_number, $request->message);
+
+            return response()->json([
+                'success' => $result['success'],
+                'message' => $result['message']
+            ]);
+        } catch (Exception $e) {
+            Log::error('Failed to send test SMS: ' . $e->getMessage(), [
+                'phone' => $request->phone_number
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to send test SMS.'
+            ], 500);
+        }
+    }
+}
+
+
+
+--- view
+@extends('layouts.admin')
+
+@section('title', 'Students Management')
+
+@section('content')
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <div class="card-head-row">
+                    <div class="card-title">Students Management</div>
+                    <div class="card-tools">
+                        <button type="button" class="btn btn-info btn-sm me-2" data-bs-toggle="modal" data-bs-target="#bulkSmsModal">
+                            <i class="fas fa-sms me-2"></i>Bulk SMS
+                        </button>
+                        <a href="{{ route('admin.import.index') }}" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-file-import me-2"></i>Import Data
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <div class="d-flex align-items-center">
+            <h4 class="card-title">All Students ({{ $users->total() }})</h4>
+            <div class="ml-auto">
+                <form method="GET" class="d-flex flex-wrap gap-2 align-items-center">
+                    <input type="text" name="search" class="form-control form-control-sm" 
+                           placeholder="Search students..." value="{{ request('search') }}" style="width: 200px;">
+                    
+                    <select name="payment_status" class="form-control form-control-sm" style="width: 130px;">
+                        <option value="">All Payments</option>
+                        <option value="pending" {{ request('payment_status') == 'pending' ? 'selected' : '' }}>Pending</option>
+                        <option value="paid" {{ request('payment_status') == 'paid' ? 'selected' : '' }}>Paid</option>
+                    </select>
+                    
+                    <select name="application_status" class="form-control form-control-sm" style="width: 140px;">
+                        <option value="">All Applications</option>
+                        <option value="pending" {{ request('application_status') == 'pending' ? 'selected' : '' }}>Pending</option>
+                        <option value="reviewing" {{ request('application_status') == 'reviewing' ? 'selected' : '' }}>Reviewing</option>
+                        <option value="accepted" {{ request('application_status') == 'accepted' ? 'selected' : '' }}>Accepted</option>
+                        <option value="rejected" {{ request('application_status') == 'rejected' ? 'selected' : '' }}>Rejected</option>
+                    </select>
+
+                    <select name="school" class="form-control form-control-sm" style="width: 180px;">
+                        <option value="">All Universities</option>
+                        @foreach($schools as $school)
+                            <option value="{{ $school }}" {{ request('school') == $school ? 'selected' : '' }}>
+                                {{ Str::limit($school, 25) }}
+                            </option>
+                        @endforeach
+                    </select>
+
+                    <select name="registration_stage" class="form-control form-control-sm" style="width: 140px;">
+                        <option value="">All Stages</option>
+                        <option value="imported" {{ request('registration_stage') == 'imported' ? 'selected' : '' }}>Imported</option>
+                        <option value="profile_completion" {{ request('registration_stage') == 'profile_completion' ? 'selected' : '' }}>Profile</option>
+                        <option value="payment" {{ request('registration_stage') == 'payment' ? 'selected' : '' }}>Payment</option>
+                        <option value="completed" {{ request('registration_stage') == 'completed' ? 'selected' : '' }}>Completed</option>
+                    </select>
+
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="fas fa-filter me-1"></i>Filter
+                    </button>
+
+                    @if(request()->hasAny(['search', 'payment_status', 'application_status', 'school', 'registration_stage']))
+                        <a href="{{ route('admin.users.index') }}" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-times me-1"></i>Clear
+                        </a>
+                    @endif
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Phone</th>
+                        <th>Email</th>
+                        <th>School</th>
+                        <th>Payment</th>
+                        <th>Application</th>
+                        <th>Registration</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($users as $user)
+                        <tr>
+                            <td>{{ $user->full_name }}</td>
+                            <td>{{ $user->phone_number }}</td>
+                            <td>{{ $user->email ?: 'N/A' }}</td>
+                            <td title="{{ $user->school }}">{{ Str::limit($user->school ?: 'N/A', 20) }}</td>
+                            <td>
+                                @if($user->payment_status == 'paid')
+                                    <span class="badge badge-success">Paid</span>
+                                @else
+                                    <span class="badge badge-warning">Pending</span>
+                                @endif
+                            </td>
+                            <td>
+                                <span class="badge badge-{{ $user->application_status == 'accepted' ? 'success' : ($user->application_status == 'rejected' ? 'danger' : 'warning') }}">
+                                    {{ ucfirst($user->application_status) }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge badge-info">
+                                    {{ ucfirst(str_replace('_', ' ', $user->registration_stage)) }}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <a href="{{ route('admin.users.show', $user) }}" class="btn btn-sm btn-outline-primary" title="View Details">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="modal" 
+                                            data-bs-target="#editModal" data-user-id="{{ $user->id }}" 
+                                            data-first-name="{{ $user->first_name }}" 
+                                            data-last-name="{{ $user->last_name }}" 
+                                            data-email="{{ $user->email }}" 
+                                            data-phone="{{ $user->phone_number }}"
+                                            data-school="{{ $user->school }}"
+                                            data-registration-stage="{{ $user->registration_stage }}"
+                                            data-payment-status="{{ $user->payment_status }}"
+                                            data-application-status="{{ $user->application_status }}" title="Edit User">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-info" data-bs-toggle="modal" 
+                                            data-bs-target="#smsModal" data-user-id="{{ $user->id }}" 
+                                            data-user-name="{{ $user->full_name }}" 
+                                            data-user-phone="{{ $user->phone_number }}" title="Send SMS">
+                                        <i class="fas fa-comment-dots"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" 
+                                            data-bs-target="#deleteModal" data-user-id="{{ $user->id }}" 
+                                            data-user-name="{{ $user->full_name }}" title="Delete User">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="8" class="text-center py-4">No students found</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+        
+        @if($users->hasPages())
+            <div class="card-footer">
+                {{ $users->appends(request()->query())->links('vendor.pagination.bootstrap-4-clean') }}
+            </div>
+        @endif
+    </div>
+</div>
+
+<!-- Edit User Modal -->
+<div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit User</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" id="editForm">
+                @csrf
+                @method('PUT')
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="editFirstName" class="form-label">First Name</label>
+                                <input type="text" class="form-control" id="editFirstName" name="first_name" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="editLastName" class="form-label">Last Name</label>
+                                <input type="text" class="form-control" id="editLastName" name="last_name" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="editEmail" class="form-label">Email</label>
+                                <input type="email" class="form-control" id="editEmail" name="email">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="editPhone" class="form-label">Phone Number</label>
+                                <input type="tel" class="form-control" id="editPhone" name="phone_number" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="editSchool" class="form-label">School</label>
+                        <input type="text" class="form-control" id="editSchool" name="school">
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="editRegistrationStage" class="form-label">Registration Stage</label>
+                                <select class="form-control" id="editRegistrationStage" name="registration_stage" required>
+                                    <option value="imported">Imported</option>
+                                    <option value="profile_completion">Profile Completion</option>
+                                    <option value="payment">Payment</option>
+                                    <option value="completed">Completed</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="editPaymentStatus" class="form-label">Payment Status</label>
+                                <select class="form-control" id="editPaymentStatus" name="payment_status" required>
+                                    <option value="pending">Pending</option>
+                                    <option value="paid">Paid</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="editApplicationStatus" class="form-label">Application Status</label>
+                                <select class="form-control" id="editApplicationStatus" name="application_status" required>
+                                    <option value="pending">Pending</option>
+                                    <option value="reviewing">Reviewing</option>
+                                    <option value="accepted">Accepted</option>
+                                    <option value="rejected">Rejected</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-save me-2"></i>Update User
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete User Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Delete User</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" id="deleteForm">
+                @csrf
+                @method('DELETE')
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Warning:</strong> This action cannot be undone!
+                    </div>
+                    <p>Are you sure you want to delete the user <strong id="deleteUserName"></strong>?</p>
+                    <p class="text-muted">This will also delete all related payment records and notifications.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash me-2"></i>Delete User
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Single SMS Modal -->
+<div class="modal fade" id="smsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Send SMS</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" id="smsForm">
+                @csrf
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label">Recipient</label>
+                        <p class="form-control-static" id="smsRecipient"></p>
+                    </div>
+                    <div class="form-group">
+                        <label for="smsMessage" class="form-label">Message</label>
+                        <textarea class="form-control" id="smsMessage" name="message" rows="4" 
+                                  maxlength="160" required placeholder="Enter your message..."></textarea>
+                        <small class="form-text text-muted">
+                            <span id="charCount">0</span>/160 characters
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-paper-plane me-2"></i>Send SMS
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Bulk SMS Modal -->
+<div class="modal fade" id="bulkSmsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Send Bulk SMS</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ route('admin.users.bulk-sms') }}">
+                @csrf
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="recipients" class="form-label">Recipients</label>
+                                <select class="form-control" id="recipients" name="recipients" required>
+                                    <option value="">Select recipient group</option>
+                                    <option value="all">All Users</option>
+                                    <option value="paid">Paid Users Only</option>
+                                    <option value="pending">Pending Payment Users</option>
+                                    <option value="accepted">Accepted Applications</option>
+                                    <option value="rejected">Rejected Applications</option>
+                                    <option value="with_phone">Users with Valid Phone</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="schoolFilter" class="form-label">University Filter (Optional)</label>
+                                <select class="form-control" id="schoolFilter" name="school_filter">
+                                    <option value="">All Universities</option>
+                                    @foreach($schools as $school)
+                                        <option value="{{ $school }}">{{ $school }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="bulkMessage" class="form-label">Message</label>
+                        <textarea class="form-control" id="bulkMessage" name="message" rows="4" 
+                                  maxlength="160" required placeholder="Enter your bulk message..."></textarea>
+                        <small class="form-text text-muted">
+                            <span id="bulkCharCount">0</span>/160 characters
+                        </small>
+                    </div>
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Warning:</strong> This will send SMS to all users matching the selected criteria. 
+                        Please ensure your message is appropriate and necessary.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="fas fa-broadcast-tower me-2"></i>Send Bulk SMS
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+@endsection
+
+@push('scripts')
+<script>
+$(document).ready(function() {
+    // Edit Modal handling
+    $('#editModal').on('show.bs.modal', function (event) {
+        const button = $(event.relatedTarget);
+        const userId = button.data('user-id');
+        const firstName = button.data('first-name');
+        const lastName = button.data('last-name');
+        const email = button.data('email');
+        const phone = button.data('phone');
+        const school = button.data('school');
+        const registrationStage = button.data('registration-stage');
+        const paymentStatus = button.data('payment-status');
+        const applicationStatus = button.data('application-status');
+        
+        const modal = $(this);
+        modal.find('#editForm').attr('action', '/admin/users/' + userId);
+        modal.find('#editFirstName').val(firstName);
+        modal.find('#editLastName').val(lastName);
+        modal.find('#editEmail').val(email);
+        modal.find('#editPhone').val(phone);
+        modal.find('#editSchool').val(school);
+        modal.find('#editRegistrationStage').val(registrationStage);
+        modal.find('#editPaymentStatus').val(paymentStatus);
+        modal.find('#editApplicationStatus').val(applicationStatus);
+    });
+
+    // Delete Modal handling
+    $('#deleteModal').on('show.bs.modal', function (event) {
+        const button = $(event.relatedTarget);
+        const userId = button.data('user-id');
+        const userName = button.data('user-name');
+        
+        const modal = $(this);
+        modal.find('#deleteForm').attr('action', '/admin/users/' + userId);
+        modal.find('#deleteUserName').text(userName);
+    });
+
+    // SMS Modal handling
+    $('#smsModal').on('show.bs.modal', function (event) {
+        const button = $(event.relatedTarget);
+        const userId = button.data('user-id');
+        const userName = button.data('user-name');
+        const userPhone = button.data('user-phone');
+        
+        const modal = $(this);
+        modal.find('#smsRecipient').text(userName + ' (' + userPhone + ')');
+        modal.find('#smsForm').attr('action', '/admin/users/' + userId + '/sms');
+    });
+
+    // Character count for SMS messages
+    $('#smsMessage, #bulkMessage').on('input', function() {
+        const maxLength = 160;
+        const currentLength = $(this).val().length;
+        const countElement = $(this).is('#smsMessage') ? '#charCount' : '#bulkCharCount';
+        
+        $(countElement).text(currentLength);
+        
+        if (currentLength > maxLength) {
+            $(countElement).addClass('text-danger');
+        } else {
+            $(countElement).removeClass('text-danger');
+        }
+    });
+
+    // Form submission with loading state
+    $('#editForm, #deleteForm').on('submit', function() {
+        const submitBtn = $(this).find('button[type="submit"]');
+        submitBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-2"></i>Processing...');
+    });
+});
+</script>
+@endpush

@@ -61,6 +61,11 @@ class UserController extends Controller
             $query->where('registration_stage', $request->registration_stage);
         }
 
+        // Created at filters
+        if ($request->filled('created_from') || $request->filled('created_to')) {
+            $query->createdBetween($request->created_from, $request->created_to);
+        }
+
         $users = $query->orderBy('created_at', 'desc')->paginate(15);
 
         // Get unique schools for filter dropdown
@@ -73,6 +78,8 @@ class UserController extends Controller
 
         return view('admin.users.index', compact('users', 'schools'));
     }
+
+
 
     public function show(User $user)
     {
@@ -282,7 +289,8 @@ class UserController extends Controller
         $request->validate([
             'message' => 'required|string|max:160',
             'recipients' => 'required|in:all,paid,pending,accepted,rejected,with_phone',
-            'school_filter' => 'nullable|string'
+            'school_filter' => 'nullable|string',
+            'created_since' => 'nullable|date',  // New validation for date filter
         ]);
 
         $query = User::query();
@@ -314,6 +322,11 @@ class UserController extends Controller
 
         if ($request->filled('school_filter')) {
             $query->where('school', 'like', "%{$request->school_filter}%");
+        }
+
+        // Apply created_since filter (new)
+        if ($request->filled('created_since')) {
+            $query->createdAfter($request->created_since);
         }
 
         // Retrieve the users. We need the models so the Notification Service can call notify() on them.

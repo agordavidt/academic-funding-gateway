@@ -63,11 +63,17 @@
                         <option value="completed" {{ request('registration_stage') == 'completed' ? 'selected' : '' }}>Completed</option>
                     </select>
 
+                    <input type="date" name="created_from" class="form-control form-control-sm" 
+                           value="{{ request('created_from') }}" style="width: 150px;" placeholder="Created From">
+                    
+                    <input type="date" name="created_to" class="form-control form-control-sm" 
+                           value="{{ request('created_to') }}" style="width: 150px;" placeholder="Created To">
+
                     <button type="submit" class="btn btn-primary btn-sm">
                         <i class="fas fa-filter me-1"></i>Filter
                     </button>
 
-                    @if(request()->hasAny(['search', 'payment_status', 'application_status', 'school', 'registration_stage']))
+                    @if(request()->hasAny(['search', 'payment_status', 'application_status', 'school', 'registration_stage', 'created_from', 'created_to']))
                         <a href="{{ route('admin.users.index') }}" class="btn btn-secondary btn-sm">
                             <i class="fas fa-times me-1"></i>Clear
                         </a>
@@ -88,6 +94,7 @@
                         <th>Payment</th>
                         <th>Application</th>
                         <th>Registration</th>
+                        <th>Created At</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -115,6 +122,7 @@
                                     {{ ucfirst(str_replace('_', ' ', $user->registration_stage)) }}
                                 </span>
                             </td>
+                            <td>{{ $user->created_at->format('Y-m-d') }}</td>
                             <td>
                                 <div class="btn-group" role="group">
                                     <a href="{{ route('admin.users.show', $user) }}" class="btn btn-sm btn-outline-primary" title="View Details">
@@ -148,7 +156,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="text-center py-4">No students found</td>
+                            <td colspan="9" class="text-center py-4">No students found</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -329,7 +337,7 @@
                 @csrf
                 <div class="modal-body">
                     <div class="row">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <div class="form-group">
                                 <label for="recipients" class="form-label">Recipients</label>
                                 <select class="form-control" id="recipients" name="recipients" required>
@@ -343,7 +351,7 @@
                                 </select>
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <div class="form-group">
                                 <label for="schoolFilter" class="form-label">University Filter (Optional)</label>
                                 <select class="form-control" id="schoolFilter" name="school_filter">
@@ -352,6 +360,13 @@
                                         <option value="{{ $school }}">{{ $school }}</option>
                                     @endforeach
                                 </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="createdSince" class="form-label">Created After (Optional)</label>
+                                <input type="date" class="form-control" id="createdSince" name="created_since">
+                                <small class="form-text text-muted">Filter to new users only</small>
                             </div>
                         </div>
                     </div>

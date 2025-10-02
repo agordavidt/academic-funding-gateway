@@ -127,4 +127,30 @@ class User extends Authenticatable
     {
         return $query->where('application_status', $status);
     }
+
+
+    public function scopeCreatedAfter($query, $date)
+    {
+        if ($date) {
+            return $query->where('created_at', '>=', $date . ' 00:00:00');
+        }
+    }
+
+    public function scopeCreatedBefore($query, $date)
+    {
+        if ($date) {
+            return $query->where('created_at', '<=', $date . ' 23:59:59');
+        }
+    }
+
+    public function scopeCreatedBetween($query, $from, $to)
+    {
+        if ($from) {
+            $query->createdAfter($from);
+        }
+        if ($to) {
+            $query->createdBefore($to);
+        }
+        return $query;
+    }
 }
